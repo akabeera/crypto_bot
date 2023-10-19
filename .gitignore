@@ -1,7 +1,6 @@
 .env
 .vscode
 
-
 __pycache
 **/__pycache__
 logs

@@ -40,6 +40,12 @@ def fetch_ticker(exchange, ticker: str):
     except NetworkError as e:
         logger.warn("WARNING: fetch_ticker network error {}, error: {}".format(ticker, e)) 
         return None
+    except IndexError as e:
+        logger.warn("WARNING: fetch_ticker returned IndexError: {}".format(e))
+        return None
+    except ExchangeError as e:
+        logger.warn('WARNING: fetch_ticker exchange error: {}'.format(e))
+        return None
         
 
 def fetch_ohlcv(exchange, ticker:str):
@@ -62,6 +68,9 @@ def fetch_ohlcv(exchange, ticker:str):
         return None
     except NetworkError as e:
         logger.warn("fetchOHLCV network error {}, error: {}".format(ticker, e)) 
+        return None
+    except ExchangeError as e:
+        logger.warn('WARNING: fetch_ticker exchange error: {}'.format(e))
         return None
 
 
