@@ -2,6 +2,7 @@
 .vscode
 
 
+env/
 __pycache
 **/__pycache__
 logs
