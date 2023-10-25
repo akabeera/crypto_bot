@@ -4,5 +4,5 @@ class BaseStrategy:
     def __init__(self):
         pass
 
-    def eval(self) -> Action:
+    def eval(self, positions, ohlcv, ticker_info) -> Action:
         pass

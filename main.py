@@ -12,6 +12,7 @@ from supported_crypto import crpto_whitelist, crypto_blacklist
 from constants import TICKS_INTERVAL, TAKE_PROFIT_THRESHOLDS, MAX_SPEND, BUY_AMOUNT, AVG_DOWN_THRESHOLD
 from trading_utils import calculate_bollinger_bands, calculate_cost_basis, is_oversold, is_overbought
 from trading.trade import Trade
+from crypto_bot import CryptoBot
 
 import logging
 import logging.config
@@ -45,7 +46,6 @@ db = client.get_database("crypto-bot")
 trades_collection = db.trades
 sell_orders_collection = db.sell_orders
 
-
 exchange_id = 'coinbase'
 exchange_class = getattr(ccxt, exchange_id)
 exchange = exchange_class({
@@ -55,6 +55,9 @@ exchange = exchange_class({
 exchange.options["createMarketBuyOrderRequiresPrice"] = False
 
 if __name__ == "__main__":
+
+    crypto_bot =  CryptoBot()
+
     idx = 0
 
     remaining_spend = MAX_SPEND
@@ -76,17 +79,17 @@ if __name__ == "__main__":
             logger.info("blacklisted, skipping {}".format(ticker))
             continue
 
-        ohlc = fetch_ohlcv(exchange, ticker_pair)
+        ohlcv = fetch_ohlcv(exchange, ticker_pair)
 
-        if (ohlc == None):
+        if (ohlcv == None):
             logger.error("unable to fetch ohlc, skipping")
             continue
 
-        if len(ohlc) == 0:
+        if len(ohlcv) == 0:
             logger.warning(f"fetchOHLCV return empty data for ticker: {ticker_pair}, skipping")
             continue
 
-        df = pd.DataFrame(ohlc, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+        df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
         df = calculate_bollinger_bands(df, window=20, std_dev=2)
 
         # Add RSI and MACD to the dataframe
@@ -105,10 +108,13 @@ if __name__ == "__main__":
             positions = trades_collection.find(ticker_filter)
             my_positions = calculate_cost_basis(ticker_pair, positions)
 
-        time.sleep(.5)
         ticker_info = fetch_ticker(exchange, ticker)
         if (not ticker_info):
             logger.error("unable to fetch ticker info for ticker: {}".format(ticker))
+            continue
+    
+        if (not ticker_info['ask']):
+            logger.error('no ask proce for ticker: {}'.format(ticker))
             continue
 
         ask = Decimal(ticker_info['ask'])
@@ -152,11 +158,18 @@ if __name__ == "__main__":
                 cost = sell_order['cost']
                 #remaining_spend = remaining_spend + (cost/2)
 
-        if profit < Decimal(-0.1):
+        if profit < Decimal(AVG_DOWN_THRESHOLD):
             amount = BUY_AMOUNT
             logger.info(f"{ticker_pair}: current price lower than current position at {profit*100}%, averaging down")
 
-            if (remaining_spend <= 0):
+
+            # if not is_oversold(last_row):
+            #     logger.info(f"{ticker_pair}: OVERSOLD not triggered yet, waiting to average down")
+            #     continue
+            # else:
+            #     logger.info(f"{ticker_pair}: OVERSOLD signal triggered!")
+
+            if (remaining_spend <= amount):
                 logger.warning(f"{ticker_pair}: surpassed max spend amount, skipping buy order")
                 continue
 
@@ -182,7 +195,7 @@ if __name__ == "__main__":
                 logger.warning(f"{ticker_pair}: surpassed max spend amount, skipping buy order")
                 continue
             
-            if (profit > Decimal(-0.05)):
+            if (profit > Decimal(-0.1)):
                 logger.info(f"{ticker_pair}: ABORTING BUY, current price is not yet worth averaging down")
                 continue
             else: 
