@@ -3,3 +3,4 @@ python-dotenv
 pymongo[srv]
 pandas
 TA-Lib
+aiohttp>=3.9.0b0
