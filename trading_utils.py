@@ -14,15 +14,13 @@ def is_oversold(last_row):
     return last_row['close'] < last_row['lower_band'] and last_row['RSI'] < 35 and last_row['MACD_signal'] > last_row['MACD']
 
 
-def calculate_cost_basis(ticker, trades_cursor): 
+def calculate_cost_basis(ticker, trades): 
     avg_position = Trade(ticker=ticker, price=Decimal(0), shares=Decimal(0), fee=Decimal(0))
 
-    current_positions = []
-    for trade in trades_cursor:
+    for trade in trades:
         price = Decimal(trade['average'])
         shares = Decimal(trade['filled'])
         fee = Decimal(trade['fee']['cost'])
-        current_positions.append(trade)
         avg_position.updateCostBasis(price=price, shares=shares, fee=fee)
 
-    return (avg_position, current_positions)
+    return avg_position
