@@ -103,5 +103,6 @@ crpto_whitelist =  [
 crypto_blacklist = {
     'USDC',
     'ACLX',
-    'CGLD'
+    'CGLD',
+    'QUICK'
 }

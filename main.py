@@ -223,5 +223,5 @@ if __name__ == "__main__":
             mongodb_service.insert_one(TRADE_COLLECTION, order)
             logger.info(f"BUY order executed. symbol: {ticker}, price: {order['price']}, amount: {order['filled']}, fees: {order['fee']['cost']}, cost: {order['cost']}")
         
-        time.sleep(.1)
+        time.sleep(1)
    

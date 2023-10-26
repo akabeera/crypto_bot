@@ -11,7 +11,7 @@ def is_overbought(last_row):
     return last_row['close'] > last_row['upper_band'] and last_row['RSI'] > 70 and last_row['MACD_signal'] < last_row['MACD']
 
 def is_oversold(last_row):
-    return last_row['close'] < last_row['lower_band'] and last_row['RSI'] < 35 and last_row['MACD_signal'] > last_row['MACD']
+    return last_row['close'] < last_row['lower_band'] and last_row['RSI'] < 32 and last_row['MACD_signal'] > last_row['MACD']
 
 
 def calculate_cost_basis(ticker, trades): 

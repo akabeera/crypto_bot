@@ -3,6 +3,7 @@ from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, E
 
 import logging
 import logging.config
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def fetch_ticker(exchange, ticker: str):
         logger.warn("WARNING: fetch_ticker authentication error {}, error: {}".format(ticker, e))
         return None
     except NetworkError as e:
-        logger.warn("WARNING: fetch_ticker network error {}, error: {}".format(ticker, e)) 
+        logger.warn("WARNING: fetch_ticker network error {}".format(ticker)) 
         return None
     except IndexError as e:
         logger.warn("WARNING: fetch_ticker returned IndexError: {}".format(e))
@@ -58,7 +59,7 @@ def fetch_ohlcv(exchange, ticker:str):
         return ohlc
         
     except BadSymbol as e:
-        logger.error("unable to fetch ticker {}, error: {}".format(ticker, e))
+        logger.error("fetchOHLCV to fetch ticker {}".format(ticker))
         return None
     except RequestTimeout as e:
         logger.warn("fetchOHLCV request timed out for {}, error: {}".format(ticker, e))
@@ -67,7 +68,7 @@ def fetch_ohlcv(exchange, ticker:str):
         logger.warn("fetchOHLCV request timed out for {}, error: {}".format(ticker, e))
         return None
     except NetworkError as e:
-        logger.warn("fetchOHLCV network error {}, error: {}".format(ticker, e)) 
+        logger.warn("fetchOHLCV network error {}".format(ticker)) 
         return None
     except ExchangeError as e:
         logger.warn('WARNING: fetch_ticker exchange error: {}'.format(e))
@@ -140,6 +141,45 @@ def create_sell_order(exchange, ticker, amount: float, price: float):
         return None
     except ExchangeError as e:
         logger.warn("create_sell_order exchange error {}, error: {}".format(ticker, e)) 
+        if e.args and len(e.args) > 0:
+            if e.args[0] == 'coinbase {"error":"PERMISSION_DENIED","error_details":"Orderbook is in limit only mode","message":"Orderbook is in limit only mode"}':
+                return create_limit_order(exchange, ticker, amount, price)
+
+        return None
+        
+def create_limit_order(exchange, ticker, amount: float, price: float):
+    try:
+        type = "limit"
+        side = "sell"
+        order_results = exchange.create_order(ticker, type, side, amount, price)
+        order_id = order_results['info']['order_id']
+
+        order = None
+        status = order_results['status']
+        while (status != 'closed'):
+            time.sleep(1)
+            order = fetch_order(exchange, order_id)
+            if (order == None):
+                return None
+        
+            status = order['status']
+
+        return order
+
+    except BadSymbol as e:
+        logger.error("unable to submit create_limit_order for ticker {}, error: {}".format(ticker, e))
+        return None
+    except RequestTimeout as e:
+        logger.warn("create_limit_order request timed out for {}, error: {}".format(ticker, e))
+        return None
+    except AuthenticationError as e:
+        logger.warn("create_limit_order request timed out for {}, error: {}".format(ticker, e))
+        return None
+    except NetworkError as e:
+        logger.warn("create_limit_order network error {}, error: {}".format(ticker, e)) 
+        return None
+    except ExchangeError as e:
+        logger.warn("create_limit_order exchange error {}, error: {}".format(ticker, e)) 
         return None
 
 def fetch_order(exchange, orderId):
