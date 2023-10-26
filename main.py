@@ -220,5 +220,5 @@ if __name__ == "__main__":
             logger.info(f"inserted trade into DB, id: {inserted_id}")
             logger.info(f"BUY order executed. symbol: {ticker}, price: {order['price']}, amount: {order['filled']}, fees: {order['fee']['cost']}, cost: {order['cost']}")
         
-        time.sleep(.1)
+        time.sleep(1)
    
