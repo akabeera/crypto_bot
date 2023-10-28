@@ -1,11 +1,18 @@
 {
     "max_spend": 50,
     "amount_per_transaction": 5,
+    "reinvestment_percent": 0,
     "sleep_interval": 20,
     "currency": "USD",
-    "currency_trading_sleep_interval": 1,
+    "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
-    "mongodb_db_name": "crypto-bot",
+    "mongodb":{
+        "db_name": "crypto-bot",
+        "current_positions_collection": "trades",
+        "closed_positions_collection" : "sell_orders"
+    },
+    
+    "stop_loss": "false",
     "strategies": [
         {
             "name": "TAKE_PROFIT",
@@ -27,8 +34,23 @@
             "priority": 2,
             "parameters": {
                 "window": 20,
-                "std_dev": 2
-            } 
+                "std_dev": 2,
+                "prevent_loss": true
+            }
+        },
+        {
+            "name": "RSI",
+            "priority": 2,
+            "parameters": {
+                "overbought_signal_threshold": 70,
+                "oversold_signal_threshold": 32,
+                "prevent_loss": true
+            }
+        },
+        {
+            "name": "MACD",
+            "priority": 2,
+            "prevent_loss": true
         }
     ],
     "support_currencies": [

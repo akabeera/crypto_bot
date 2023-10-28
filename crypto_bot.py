@@ -3,13 +3,17 @@ import os
 import ccxt
 import time
 import pandas as pd
+from decimal import *
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-
 from strategies.base_strategy import BaseStrategy
 from strategies.utils import strategy_factory
+from trading.action import Action
+from trading.trade import Trade
+from utils.mongodb_service import MongoDBService
+from utils.constants import ZERO
 
 import logging
 import logging.config
@@ -33,25 +37,29 @@ configureLogger("INFO")
 CONFIG_FILE = 'config.json'
 API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
-MONGO_CONNECTION_STRING = os.getenv('MONGO_CONNECTION_STRING')
 
 class CryptoBot:
-    
-    client = MongoClient(MONGO_CONNECTION_STRING)
 
-    def __init__(self):
+    def __init__(self, db_connection_string):
         with open(CONFIG_FILE) as f:
             self.config = json.load(f)
-            print (self.config)
 
-        self.max_spend = self.config["max_spend"]
-        self.amount_per_transaction = self.config["amount_per_transaction"]
-        self.sleep_interval = self.config["sleep_interval"]
+        self.max_spend = Decimal(self.config["max_spend"])
+        self.amount_per_transaction = Decimal(self.config["amount_per_transaction"])
+        self.reinvestment_percent = Decimal(self.config["reinvestment_percent"]/100)
+        self.remaining_balance = self.max_spend
+
         self.currency: str = self.config["currency"]
-        self.currency_trading_sleep_interval = self.config["currency_trading_sleep_interval"]
+        self.sleep_interval = self.config["sleep_interval"]
+        self.inter_currency_sleep_interval = self.config["inter_currency_sleep_interval"]
         self.crypto_whitelist = self.config["support_currencies"]
         self.crypto_blacklist = self.config["blacklisted_currencies"]
-        self.mongo_db_name = self.config["mongodb_db_name"]
+
+        mongodb_config = self.config["mongodb"] 
+        self.mongodb_db_name = mongodb_config["db_name"]
+        self.current_positions_collection = mongodb_config["current_positions_collection"]
+        self.closed_positions_collection = mongodb_config["closed_positions_collection"]
+        self.mongodb_service = MongoDBService(db_connection_string, self.mongodb_db_name)
 
         exchange_id = self.config["exchange_id"]
         exchange_class = getattr(ccxt, exchange_id)
@@ -60,21 +68,34 @@ class CryptoBot:
             'secret': API_SECRET
         })
 
-        self.exchange.options["createMarketBuyOrderRequiresPrice"] = False
+        self.exchange.options["createMarketBuyOrderRequiresPrice"] = False            
+        self.init_strategies()
+
+    def init_strategies(self):
+        strategies_json = self.config["strategies"]
+
+        self.strategies = {}
+        self.strategies_priorities = []
         
-        strategiesJson = self.config["strategies"]
-        strategies = []
-        self.max_strategy_priority = 0
-        for strategyJson in strategiesJson:
-            strategies.append(strategy_factory(strategyJson))
+        for strategy_json in strategies_json:
+            strategy_priority = strategy_json["priority"]
+            strategy_object = strategy_factory(strategy_json)
 
-        self.db = CryptoBot.client.get_database(self.mongo_db_name)
-        self.trades_collection = self.db.trades
-        self.sell_orders_collection = self.db.sell_orders
+            if strategy_object is None:
+                logger.warn(f"Encountered unsupported strategy config: {strategy_json}")
+                continue
+
+            if strategy_priority in self.strategies:
+                self.strategies[strategy_priority].append(strategy_object)
+            else:
+                self.strategies[strategy_priority] = [strategy_object]
+
+            if strategy_priority not in self.strategies_priorities:
+                self.strategies_priorities.append(strategy_priority)
+
+        self.strategies_priorities.sort()
             
-        #self.init_strategies(self.config)
 
-    
     def run(self):
         idx = 0
         N = len(self.crypto_whitelist)
@@ -85,30 +106,103 @@ class CryptoBot:
                 time.sleep(self.sleep_interval)
                 idx = 0
 
-            idx += 1 
             ticker:str = self.crypto_whitelist[N-idx-1]
-            ticker_pair = "{}/{}".format(ticker.upper(), self.currency.upper())
+            idx += 1 
+
+            ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())
 
             if ticker in self.crypto_blacklist:
-                logger.info("blacklisted, skipping {}".format(ticker))
+                logger.info(f"{ticker_pair}: blacklisted, skipping")
                 continue
+
+            ticker_filter = {
+                'symbol': ticker_pair
+            }
+            trades = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
+            avg_position = self.calculate_avg_position(ticker_pair, trades)            
 
             ohlcv = self.fetch_ohlcv(ticker_pair)
-
-            if ohlcv == None:
-                logger.error("unable to fetch ohlc, skipping")
+            if ohlcv == None or len(ohlcv) == 0:
+                logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
 
-            if len(ohlcv) == 0:
-                logger.warning(f"fetchOHLCV return empty data for ticker: {ticker_pair}, skipping")
+            candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+            ticker_info = self.fetch_ticker(ticker_pair)
+            if (not ticker_info or not ticker_info['ask']):
+                logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
 
-            df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+            ask_price = ticker_info['ask']
+    
+            for priority in self.strategies_priorities:
+                cuurrent_strategies = self.strategies[priority]
 
+                action = Action.NOOP
+                for s_idx, strgy in enumerate(cuurrent_strategies):
+                    curr_action = strgy.eval(avg_position, candles_df, ticker_info)    
+                    if s_idx == 0:
+                        action = curr_action
+                    else:
+                        if action != curr_action:
+                            action = Action.NOOP
+                            break
+
+                logger.info(f"{ticker_pair}:  {action} action")
+
+                if action == Action.BUY:
+                    logger.info(f"{ticker_pair}: BUYING @ price: ${ask_price}")
+                    self.handle_buy_order(ticker_pair)
+                    break
+                elif action == Action.SELL:
+                    logger.info(f"{ticker_pair}: SELL @ ${ask_price}")
+                    self.handle_sell_order(ticker_pair, float(avg_position.shares), float(ask_price))
+                    break
+
+            time.sleep(self.inter_currency_sleep_interval)
+    
+    def handle_buy_order(self, ticker_pair: str):
+        if self.remaining_balance < self.amount_per_transaction:
+            logger.warn(f"{ticker_pair}: insuffiecient balance to place buy order, skipping")
+            return
+        
+        order = self.create_buy_order(ticker_pair, self.amount_per_transaction)
+        if not order:
+            logger.error(f"{ticker_pair}: FAILED to execute buy order")
+            return
+        self.remaining_balance -= self.amount_per_transaction
+
+        self.mongodb_service.insert_one(self.current_positions_collection, order)
+        logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, amount: {order['filled']}, fees: {order['fee']['cost']}, cost: {order['cost']}")
+
+
+    def handle_sell_order(self, ticker_pair: str, shares: float, ask_price: float):
+        order = self.create_sell_order(ticker_pair,  shares, ask_price)
+
+        if not order:
+            logger.error(f"{ticker_pair}: FAILED to execute set order")
+            return
+
+        profit = order['info']['total_value_after_fees']
+        logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, amount: {order['filled']}, proceeds: {profit}")
+        ticker_filter = {
+            'symbol': ticker_pair
+        }
+        current_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
+        closed_position = {
+            'sell_order': order,
+            'closed_positions': current_positions
+        }
+
+        self.mongodb_service.insert_one(self.closed_positions_collection, closed_position)
+        self.mongodb_service.delete_many(self.current_positions_collection, ticker_filter)
+
+        if self.reinvestment_percent > ZERO:
+            self.remaining_balance += (Decimal(profit) * self.reinvestment_percent)
+    
     def fetch_ohlcv(self, ticker_pair:str):
         try:
             if (not self.exchange.has['fetchOHLCV']):
-                logger.warn('exchange does not support fetchOHLCV')
+                logger.warn(f"{ticker_pair}: xchange does not support fetchOHLCV")
                 return None
             
             ohlcv = self.exchange.fetch_ohlcv(ticker_pair)
@@ -129,3 +223,170 @@ class CryptoBot:
         except ExchangeError as e:
             logger.warn('fetchOHLCV: exchange error: {}'.format(e))
             return None
+        
+    def fetch_ticker(self, ticker_pair: str):
+        try:
+            if (self.exchange.has['fetchTicker']):
+                tickerInfo = self.exchange.fetch_ticker(ticker_pair)
+                return tickerInfo
+            else:
+                logger.warn('unable to fetch ticker: {ticker}')
+                return None
+        except BadSymbol as e:
+            logger.error("unablet to fetch ticker {}, error: {}".format(ticker_pair, e))
+            return None
+        except RequestTimeout as e:
+            logger.warn("fetch_ticker request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except AuthenticationError as e:
+            logger.warn("WARNING: fetch_ticker authentication error {}, error: {}".format(ticker_pair, e))
+            return None
+        except NetworkError as e:
+            logger.warn("WARNING: fetch_ticker network error {}".format(ticker_pair)) 
+            return None
+        except IndexError as e:
+            logger.warn("WARNING: fetch_ticker returned IndexError: {}".format(e))
+            return None
+        except ExchangeError as e:
+            logger.warn('WARNING: fetch_ticker exchange error: {}'.format(e))
+            return None
+    
+    def create_buy_order(self, ticker_pair, amount):
+        try:
+            order_results = self.exchange.create_market_buy_order(ticker_pair, amount)
+            order_id = order_results['info']['order_id']
+
+            order = None
+            status = order_results['status']
+            while (status != 'closed'):
+                time.sleep(1)
+                order = self.fetch_order(self.exchange, order_id)
+                if (order == None):
+                    return None
+            
+                status = order['status']
+
+            return order
+        except BadSymbol as e:
+            logger.error("unable to submit create_buy_order for ticker {}, error: {}".format(ticker_pair, e))
+            return None
+        except RequestTimeout as e:
+            logger.warn("create_buy_order request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except AuthenticationError as e:
+            logger.warn("create_buy_order request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except NetworkError as e:
+            logger.warn("create_buy_order network error {}, error: {}".format(ticker_pair, e)) 
+            return None
+        except ExchangeError as e:
+            logger.warn("create_buy_order exchange error {}, error: {}".format(ticker_pair, e)) 
+            return None
+
+
+    def create_sell_order(self, ticker_pair, shares: float, price: float):
+        try:
+            type = "market"
+            side = "sell"
+            order_results = self.exchange.create_order(ticker_pair, type, side, shares, price)
+            order_id = order_results['info']['order_id']
+
+            order = None
+            status = order_results['status']
+            while (status != 'closed'):
+                time.sleep(1)
+                order = self.fetch_order(self.exchange, order_id)
+                if (order == None):
+                    return None
+            
+                status = order['status']
+
+            return order
+
+        except BadSymbol as e:
+            logger.error("unable to submit create_sell_order for ticker {}, error: {}".format(ticker_pair, e))
+            return None
+        except RequestTimeout as e:
+            logger.warn("create_sell_order request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except AuthenticationError as e:
+            logger.warn("create_sell_order request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except NetworkError as e:
+            logger.warn("create_sell_order network error {}, error: {}".format(ticker_pair, e)) 
+            return None
+        except ExchangeError as e:
+            logger.warn("create_sell_order exchange error {}, error: {}".format(ticker_pair, e)) 
+            if e.args and len(e.args) > 0:
+                if e.args[0] == 'coinbase {"error":"PERMISSION_DENIED","error_details":"Orderbook is in limit only mode","message":"Orderbook is in limit only mode"}':
+                    return self.create_limit_order(ticker_pair, shares, price)
+
+            return None
+            
+    def create_limit_order(self, ticker_pair, amount: float, price: float):
+        try:
+            type = "limit"
+            side = "sell"
+            order_results = self.exchange.create_order(ticker_pair, type, side, amount, price)
+            order_id = order_results['info']['order_id']
+
+            order = None
+            status = order_results['status']
+            while (status != 'closed'):
+                time.sleep(1)
+                order = self.fetch_order(order_id)
+                if (order == None):
+                    return None
+            
+                status = order['status']
+
+            return order
+
+        except BadSymbol as e:
+            logger.error("unable to submit create_limit_order for ticker {}, error: {}".format(ticker_pair, e))
+            return None
+        except RequestTimeout as e:
+            logger.warn("create_limit_order request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except AuthenticationError as e:
+            logger.warn("create_limit_order request timed out for {}, error: {}".format(ticker_pair, e))
+            return None
+        except NetworkError as e:
+            logger.warn("create_limit_order network error {}, error: {}".format(ticker_pair, e)) 
+            return None
+        except ExchangeError as e:
+            logger.warn("create_limit_order exchange error {}, error: {}".format(ticker_pair, e)) 
+            return None
+
+    def fetch_order(self, orderId):
+        try:
+            if (not self.exchange.has['fetchOrder']):
+                print("WARNING: exhange does not support fetchOrder")
+                return None
+
+            order = self.exchange.fetch_order(orderId)
+            return order
+
+        except RequestTimeout as e:
+            logger.warn("fetch_order request timed out for {}, error: {}".format(orderId, e))
+            return None
+        except AuthenticationError as e:
+            logger.warn("fetch_order authentication error for {}, error: {}".format(orderId, e))
+            return None
+        except NetworkError as e:
+            logger.warn("fetch_order network error {}, error: {}".format(orderId, e)) 
+            return None
+
+
+    def calculate_avg_position(self, ticker_pair, trades):
+        if len(trades) == 0:
+            return None
+        
+        avg_position = Trade(ticker_pair, Decimal(0), Decimal(0), Decimal(0))
+        for trade in trades:
+            price = Decimal(trade['average'])
+            shares = Decimal(trade['filled'])
+            fee = Decimal(trade['fee']['cost'])
+            avg_position.updateCostBasis(price, shares, fee)
+
+        return avg_position
