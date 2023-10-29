@@ -11,8 +11,6 @@
         "current_positions_collection": "trades",
         "closed_positions_collection" : "sell_orders"
     },
-    
-    "stop_loss": "false",
     "strategies": [
         {
             "name": "TAKE_PROFIT",
