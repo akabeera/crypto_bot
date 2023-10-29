@@ -14,7 +14,7 @@ class TakeProfit(BaseStrategy):
         
         profit = self.calculate_profit_percent(avg_position, ticker_info)
 
-        if profit >= self.threshold_percent:
+        if profit <= self.threshold_percent:
             return Action.SELL
         
         return Action.HOLD

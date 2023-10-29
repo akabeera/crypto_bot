@@ -7,6 +7,9 @@ from trading.action import Action
 class MACD(BaseStrategy):
     def __init__(self, config):
         self.priority = config["priority"]
+        self.prevent_loss = config["prevent_loss"]
+        if self.prevent_loss is None:
+            self.prevent_loss = True
 
 
     def eval(self, avg_position, candles_df, ticker_info):

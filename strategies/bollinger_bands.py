@@ -6,14 +6,13 @@ from trading.action import Action
 class BollingerBands(BaseStrategy):
     def __init__(self, config):
         self.priority = config["priority"]
+        self.prevent_loss = config["prevent_loss"]
+        if self.prevent_loss is None:
+            self.prevent_loss = True
 
         parameters = config["parameters"]
         self.window = parameters["window"]
         self.std_dev = parameters["std_dev"]
-
-        self.prevent_loss = parameters["prevent_loss"]
-        if self.prevent_loss is None:
-            self.prevent_loss = True
 
 
     def eval(self, avg_position, candles_df, ticker_info):

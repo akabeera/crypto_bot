@@ -86,7 +86,88 @@ The config.json is the default config file the crypto-bot will load that defines
 
 
 ### Strategies  
-Stratgies are defined in the **strategies** field of the **config.json**
+Stratgies are defined in the **strategies** field of the **config.json**  Defining a strategy is simple, there can be multiple strategies both will evaluate each with the appropriate priority as defined in the strategy JSON.  Each strategy JSON must contain:
+
+
+|  Name  |  Type |  Default |  Description |
+|:-:|:-:|:-:|---|
+| name  | string  |   |  The name of strategy, typically the name of the indicators such RSI, MACD.  The name MUST match the list of algready implemented indicators.  |
+|  priority | number  |  0 |  Lowest numbers will always take highest priority. This defines the order in which each strategy evaluated.  You can have multiple strategies with the same priority |
+| prevent_loss | boolean  | True  | Will prevent selling at a loss, even if strategy triggers a SELL signal
+|  parameters |  Object |   |  Each strategy will require different parameters to perform its operations.   |    
+
+
+The strategies will execute with the following heuristics:  
+1. Lowest priority first  
+2. If a BUY/SIGNAL signal is triggered, order is executed and lower priority strategies are skipped
+3. If multiple strategies have the same priority, the ALL strategies at that priority MUST have consensus to execute a trade.  (e.g All BUY or SELL signals must be returned)  
+4. If a SELL signal is triggered AND the current position is at a loss, AND **prevent_loss=TRUE** then the signal will be converted to a HOLD signal  
+
+For example given the following **example strategy**:  
+
+```
+.
+.
+.
+    "strategies": [
+        {
+            "name": "TAKE_PROFIT",
+            "priority": 0,
+            "parameters": {
+                "threshold_percent": 10
+            } 
+        },
+        {
+            "name": "AVERAGE_DOWN",
+            "priority": 1,
+            "parameters": {
+                "threshold_percent": 25,
+                "num_times": 2
+            } 
+        },
+        {
+            "name": "BOLLINGER_BANDS",
+            "priority": 2,
+            "parameters": {
+                "window": 20,
+                "std_dev": 2
+                
+            }
+        },
+        {
+            "name": "RSI",
+            "priority": 2,
+            "parameters": {
+                "overbought_signal_threshold": 70,
+                "oversold_signal_threshold": 32
+            }
+        },
+        {
+            "name": "MACD",
+            "priority": 2,
+            "prevent_loss": true
+        }
+    ]
+     "support_currencies": [
+        "BTC",
+        "SHIB"
+        .
+        .
+        .
+     ]
+    .
+    .
+    .
+
+```
+For EACH crypto currency defined in the **support_currencies** array the crypto bot will evaluate each strategy like the following:
+
+1. **TAKE_PROFIT** will trigger a BUY signal if there's an open position AND profit > 10%, otherwise trigger a HOLD signal
+2. If a BUY signal is triggered, skip other strategies and move on to the next crypto currency on the list, otherwise go to #3
+3. **AVERAGE_DOWN** will trigger a BUY signal if there's an open position and profit <= -25%, otherwise trigger a HOLD
+4. If BUY signal is triggered, skip other strategies and move on to the next crypto currency on the list, otherwise go to #5
+5. **RSI**, **MACD**, **BOLLINGER_BANDS**  all have same priorty so ALL three must trigger BUY/SELL, otherwise is NOOP signal is triggered
+6. If all three above triggers BUY/SELL then execute the appropriate order and move on to the next crypto currency  
 
 
 

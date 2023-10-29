@@ -21,11 +21,11 @@ class BaseStrategy:
         return profit_pct
 
     def prevent_loss(self, avg_position, ticker_info, curr_action):
-            if avg_position is None:
-                return Action.NOOP
+        if avg_position is None:
+            return Action.NOOP
+        
+        profit_pct = self.calculate_profit_percent(avg_position, ticker_info)
+        if profit_pct < Decimal(0):
+            curr_action = Action.HOLD
             
-            profit_pct = self.calculate_profit_percent(avg_position, ticker_info)
-            if profit_pct < Decimal(0):
-                curr_action = Action.HOLD
-                
-            return curr_action
+        return curr_action

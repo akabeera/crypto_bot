@@ -32,8 +32,8 @@
             "priority": 2,
             "parameters": {
                 "window": 20,
-                "std_dev": 2,
-                "prevent_loss": true
+                "std_dev": 2
+                
             }
         },
         {
@@ -41,8 +41,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 32,
-                "prevent_loss": true
+                "oversold_signal_threshold": 32
             }
         },
         {
