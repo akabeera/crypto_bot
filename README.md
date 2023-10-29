@@ -16,7 +16,10 @@ The crypto-bot has a dependency on the TA-Lib python library, which will automat
 Currently, the crypto-bot only supports coinbase exchange but more exchanges will be suppported in the future.  You'll need to create an API key through your coinbase account.  See [here](https://docs.cloud.coinbase.com/sign-in-with-coinbase/docs/api-key-authentication#generating-an-api-key) for instructions.  The below scope should be enabled AND please ensure to enable the specific Crypto Currencies you plan to run.    
 
 ``````
-wallet:accounts:read, wallet:buys:create, wallet:buys:read, wallet:notifications:read, wallet:orders:create, wallet:orders:read, wallet:sells:create, wallet:sells:read, wallet:supported-assets:read, wallet:trades:create, wallet:trades:read, wallet:transactions:read, wallet:transactions:request, wallet:transactions:send, wallet:transactions:transfer, wallet:user:read
+wallet:accounts:read, wallet:buys:create, wallet:buys:read, wallet:notifications:read, wallet:orders:create,  
+wallet:orders:read, wallet:sells:create, wallet:sells:read, wallet:supported-assets:read, wallet:trades:create,  
+wallet:trades:read, wallet:transactions:read, wallet:transactions:request, wallet:transactions:send,  
+wallet:transactions:transfer, wallet:user:read
 ``````  
 
 ## Getting Started
