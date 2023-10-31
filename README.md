@@ -180,7 +180,7 @@ Anyone is free to submit pull requests to improve the usability of crypto-bot.  
 1. Implementation of other common indicators/strategies
 2. Configurable parameters for fetching candles for each strategy
 3. Running each crypto currency asynchronously
-4
+4. Adding support for other exchanges
 
 # Disclaimer  
 Anyone is free to use the crypto-bot as they like.  But it's the user's responsibility to ensure the bot performs the transactions as expected.  It's recommended users do their own due diligence for strategies they create and to always perform necessary testing before running the crypto-bot in production. 
