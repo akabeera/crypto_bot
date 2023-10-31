@@ -1,5 +1,7 @@
 # crypto-bot
-A super simple and straight forward bot with a simple way to implement basic strategies for crypto trading.  Define a line of crypto currencies, and the strategy to BUY and SELL said crypto currencies.  The bot iterates over the list of crypto currencies and execute the appropriate trades synchronously.  The **crypto-bot** is overly optimistic by default and will never SELL at a loss even if a SELL signal is triggered (This can be overriden in the config file). 
+A super simple and straight forward bot with a simple way to implement basic strategies via a config file for crypto trading.  Define a list of crypto currencies, and strategies to BUY and SELL said crypto currencies.  The bot iterates over the list of crypto currencies synchronously and execute the appropriate trades.  
+
+Note: The **crypto-bot** is overly optimistic by default and will never SELL at a loss even if a SELL signal is triggered (This can be overriden in the config file). 
 
 ## Prequisites
 
@@ -16,9 +18,12 @@ The crypto-bot has a dependency on the TA-Lib python library, which will automat
 Currently, the crypto-bot only supports coinbase exchange but more exchanges will be suppported in the future.  You'll need to create an API key through your coinbase account.  See [here](https://docs.cloud.coinbase.com/sign-in-with-coinbase/docs/api-key-authentication#generating-an-api-key) for instructions.  The below scope should be enabled AND please ensure to enable the specific Crypto Currencies you plan to run.    
 
 ``````
-wallet:accounts:read, wallet:buys:create, wallet:buys:read, wallet:notifications:read, wallet:orders:create,  
-wallet:orders:read, wallet:sells:create, wallet:sells:read, wallet:supported-assets:read, wallet:trades:create,  
-wallet:trades:read, wallet:transactions:read, wallet:transactions:request, wallet:transactions:send,  
+wallet:accounts:read, wallet:buys:create, wallet:buys:read,  
+wallet:notifications:read, wallet:orders:create,  
+wallet:orders:read, wallet:sells:create, wallet:sells:read,  
+wallet:supported-assets:read, wallet:trades:create,  
+wallet:trades:read, wallet:transactions:read,  
+wallet:transactions:request, wallet:transactions:send,  
 wallet:transactions:transfer, wallet:user:read
 ``````  
 
@@ -65,7 +70,7 @@ MONGO_CONNECTION_STRING=<MONGO_CONNECTION_STRING>
 ## Running crypto-bot
 
 ### config.json
-The config.json is the default config file the crypto-bot will load that defines various parameters and your trading strategy.  See the following table for details on each parameter    
+The **config.json** is the default config file the crypto-bot will load. It will defines various parameters and your trading strategy.  See the following table for details:    
 
 ### General Parameters
 
@@ -170,8 +175,12 @@ For EACH crypto currency defined in the **support_currencies** array the crypto 
 6. If all three above triggers BUY/SELL then execute the appropriate order and move on to the next crypto currency  
 
 
+# Contributing  
+Anyone is free to submit pull requests to improve the usability of crypto-bot.  Few high priority features still needed are:  
+1. Implementation of other common indicators/strategies
+2. Configurable parameters for fetching candles for each strategy
+3. Running each crypto currency asynchronously
+4
 
-
-# Contributing
-
-# Disclaimer
+# Disclaimer  
+Anyone is free to use the crypto-bot as they like.  But it's the user's responsibility to ensure the bot performs the transactions as expected.  It's recommended users do their own due diligence for strategies they create and to always perform necessary testing before running the crypto-bot in production. 
