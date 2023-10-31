@@ -1,7 +1,7 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.action import Action
+from trading.trade_action import TradeAction
 
 class AverageDown(BaseStrategy):
     def __init__(self, config):
@@ -10,11 +10,11 @@ class AverageDown(BaseStrategy):
 
     def eval(self, avg_position, candles_df, ticker_info):
         if avg_position == None:
-            return Action.NOOP
+            return TradeAction.NOOP
         
         profit_percent = self.calculate_profit_percent(avg_position, ticker_info)
 
         if profit_percent < self.threshold_percent:
-            return Action.BUY
+            return TradeAction.BUY
         
-        return Action.HOLD
+        return TradeAction.HOLD

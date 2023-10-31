@@ -6,11 +6,9 @@ import pandas as pd
 from decimal import *
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
 from dotenv import load_dotenv
-from pymongo import MongoClient
 
-from strategies.base_strategy import BaseStrategy
 from strategies.utils import strategy_factory
-from trading.action import Action
+from trading.trade_action import TradeAction
 from trading.trade import Trade
 from utils.mongodb_service import MongoDBService
 from utils.constants import ZERO
@@ -103,6 +101,7 @@ class CryptoBot:
         while True:
 
             if idx == N:
+                logger.info(f"heartbeat!")
                 time.sleep(self.sleep_interval)
                 idx = 0
 
@@ -128,7 +127,7 @@ class CryptoBot:
 
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
             ticker_info = self.fetch_ticker(ticker_pair)
-            if (not ticker_info or not ticker_info['ask']):
+            if (not ticker_info or ticker_info['ask'] is None):
                 logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
 
@@ -137,23 +136,22 @@ class CryptoBot:
             for priority in self.strategies_priorities:
                 cuurrent_strategies = self.strategies[priority]
 
-                action = Action.NOOP
+                action = TradeAction.NOOP
                 for s_idx, strgy in enumerate(cuurrent_strategies):
                     curr_action = strgy.eval(avg_position, candles_df, ticker_info)    
                     if s_idx == 0:
                         action = curr_action
                     else:
                         if action != curr_action:
-                            action = Action.NOOP
+                            action = TradeAction.NOOP
                             break
 
-                logger.info(f"{ticker_pair}:  {action} action")
 
-                if action == Action.BUY:
-                    logger.info(f"{ticker_pair}: BUYING @ price: ${ask_price}")
+                if action == TradeAction.BUY:
+                    logger.info(f"{ticker_pair}: BUY @ price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
                     break
-                elif action == Action.SELL:
+                elif action == TradeAction.SELL:
                     logger.info(f"{ticker_pair}: SELL @ ${ask_price}")
                     self.handle_sell_order(ticker_pair, float(avg_position.shares), float(ask_price))
                     break
@@ -162,7 +160,7 @@ class CryptoBot:
     
     def handle_buy_order(self, ticker_pair: str):
         if self.remaining_balance < self.amount_per_transaction:
-            logger.warn(f"{ticker_pair}: insuffiecient balance to place buy order, skipping")
+            logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
             return
         
         order = self.create_buy_order(ticker_pair, self.amount_per_transaction)

@@ -1,14 +1,14 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.action import Action
+from trading.trade_action import TradeAction
 
 class BollingerBands(BaseStrategy):
     def __init__(self, config):
         self.priority = config["priority"]
-        self.prevent_loss = config["prevent_loss"]
-        if self.prevent_loss is None:
-            self.prevent_loss = True
+        self.prevent_loss = True
+        if "prevent_loss" in config:
+            self.prevent_loss = config["prevent_loss"]
 
         parameters = config["parameters"]
         self.window = parameters["window"]
@@ -30,14 +30,14 @@ class BollingerBands(BaseStrategy):
         upper_band = last_row[upper_band_key]
         lower_band = last_row[lower_band_key]
 
-        action = Action.NOOP
+        action = TradeAction.NOOP
         if close > upper_band:
-            action =  Action.SELL
+            action =  TradeAction.SELL
         elif close < lower_band:
-            action = Action.BUY
+            action = TradeAction.BUY
 
-        if self.prevent_loss and action == Action.SELL:
-            action = self.prevent_loss(avg_position, ticker_info, action)
+        if self.prevent_loss and action == TradeAction.SELL:
+            action = self.prevent_loss_eval(avg_position, ticker_info, action)
 
         
         return action

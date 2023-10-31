@@ -2,14 +2,14 @@ import talib
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.action import Action
+from trading.trade_action import TradeAction
 
 class MACD(BaseStrategy):
     def __init__(self, config):
         self.priority = config["priority"]
-        self.prevent_loss = config["prevent_loss"]
-        if self.prevent_loss is None:
-            self.prevent_loss = True
+        self.prevent_loss = True
+        if "prevent_loss" in config:
+            self.prevent_loss = config["prevent_loss"]
 
 
     def eval(self, avg_position, candles_df, ticker_info):
@@ -22,14 +22,14 @@ class MACD(BaseStrategy):
         macd = last_row[macd_key]
         macd_signal = last_row[macd_signal_key]
 
-        action = Action.NOOP
+        action = TradeAction.NOOP
         if macd_signal < macd:
-            action = Action.SELL
+            action = TradeAction.SELL
         elif macd_signal > macd:
-            action = Action.BUY
+            action = TradeAction.BUY
 
-        if self.prevent_loss and action == Action.SELL:
-            action = self.prevent_loss(avg_position, ticker_info, action)
+        if self.prevent_loss and action == TradeAction.SELL:
+            action = self.prevent_loss_eval(avg_position, ticker_info, action)
         
         return action
 

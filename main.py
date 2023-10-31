@@ -1,18 +1,9 @@
 import os
 import ccxt
-import time
-import talib
-import pandas as pd
 from decimal import *
 from dotenv import load_dotenv
 
-from crypto_utils import fetch_ticker, fetch_ohlcv, create_buy_order, create_sell_order
-from supported_crypto import crpto_whitelist, crypto_blacklist
-from constants import TICKS_INTERVAL, TAKE_PROFIT_THRESHOLDS, MAX_SPEND, BUY_AMOUNT, AVG_DOWN_THRESHOLD
-from trading_utils import calculate_bollinger_bands, calculate_cost_basis, is_oversold, is_overbought
-from trading.trade import Trade
 from crypto_bot import CryptoBot
-from utils.mongodb_service import MongoDBService
 
 import logging
 import logging.config
@@ -53,5 +44,3 @@ if __name__ == "__main__":
     
     crypto_bot =  CryptoBot(MONGO_CONNECTION_STRING)
     crypto_bot.run()
-
-    remaining_spend = MAX_SPEND

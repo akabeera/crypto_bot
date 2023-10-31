@@ -1,7 +1,7 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.action import Action
+from trading.trade_action import TradeAction
 
 class TakeProfit(BaseStrategy):
     def __init__(self, config):
@@ -10,12 +10,12 @@ class TakeProfit(BaseStrategy):
 
     def eval(self, avg_position, candles_df, ticker_info):
         if avg_position == None:
-            return Action.NOOP
+            return TradeAction.NOOP
         
         profit = self.calculate_profit_percent(avg_position, ticker_info)
 
         if profit <= self.threshold_percent:
-            return Action.SELL
+            return TradeAction.SELL
         
-        return Action.HOLD
+        return TradeAction.HOLD
         
