@@ -1,6 +1,6 @@
 from enum import Enum
 
-class Action(Enum):
+class TradeAction(Enum):
     BUY = 0,
     SELL = 1,
     HOLD = 2,

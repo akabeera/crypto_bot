@@ -1,15 +1,20 @@
-from .base_strategy import BaseStrategy
+from decimal import *
 
-def strategy_factory(strategyJson) -> BaseStrategy:
-    strategy_name = strategyJson["name"]
-    match strategy_name:
-        case "TAKE_PROFIT":
-            print("hello")
-        case "AVERAGE_DOWN":
-            print("hello")
-        case "BOLLINGER_BANDS":
-            print("sdjflsd")
-        case _:
-            print('not supported')
+FEE_MULTIPLIER = Decimal(2)
 
+def calculate_profit_percent(avg_position, ticker_info) -> Decimal:
+    if avg_position is None:
+        return None
     
+    ask = Decimal(ticker_info['ask'])
+    price = Decimal(avg_position["price"])
+    shares = Decimal(avg_position["amount"])
+    fee = Decimal(avg_position["fee"]["cost"])
+    cost = Decimal(avg_position["cost"])
+
+
+    profit = (ask - price) * shares 
+    profit_after_fees = profit - (fee * FEE_MULTIPLIER)
+    profit_after_fees_pct = profit_after_fees/cost
+
+    return profit_after_fees_pct
