@@ -1,24 +1,20 @@
-from .base_strategy import BaseStrategy
-from .take_profit import TakeProfit
-from .avg_down import AverageDown
-from .bollinger_bands import BollingerBands
-from .rsi import RSI
-from .macd import MACD
+from decimal import *
 
-def strategy_factory(strategy_json) -> BaseStrategy:
-    strategy_name = strategy_json["name"]
-    match strategy_name:
-        case "TAKE_PROFIT":
-            return TakeProfit(strategy_json)
-        case "AVERAGE_DOWN":
-            return AverageDown(strategy_json)
-        case "BOLLINGER_BANDS":
-            return BollingerBands(strategy_json)
-        case "RSI":
-            return RSI(strategy_json)
-        case "MACD":
-            return MACD(strategy_json)
-        case _:
-            return None
+FEE_MULTIPLIER = Decimal(2)
 
+def calculate_profit_percent(avg_position, ticker_info) -> Decimal:
+    if avg_position is None:
+        return None
     
+    ask = Decimal(ticker_info['ask'])
+    price = Decimal(avg_position["price"])
+    shares = Decimal(avg_position["amount"])
+    fee = Decimal(avg_position["fee"]["cost"])
+    cost = Decimal(avg_position["cost"])
+
+
+    profit = (ask - price) * shares 
+    profit_after_fees = profit - (fee * FEE_MULTIPLIER)
+    profit_after_fees_pct = profit_after_fees/cost
+
+    return profit_after_fees_pct

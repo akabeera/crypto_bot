@@ -7,7 +7,8 @@ from decimal import *
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
 from dotenv import load_dotenv
 
-from strategies.utils import strategy_factory
+from strategies.strategy_factory import strategy_factory
+from strategies.utils import calculate_profit_percent
 from trading.trade_action import TradeAction
 from trading.trade import Trade
 from utils.mongodb_service import MongoDBService
@@ -118,7 +119,7 @@ class CryptoBot:
                 'symbol': ticker_pair
             }
             trades = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
-            avg_position = self.calculate_avg_position(ticker_pair, trades)            
+            avg_position = self.calculate_avg_position(trades)            
 
             ohlcv = self.fetch_ohlcv(ticker_pair)
             if ohlcv == None or len(ohlcv) == 0:
@@ -146,16 +147,17 @@ class CryptoBot:
                             action = TradeAction.NOOP
                             break
 
-
                 if action == TradeAction.BUY:
-                    logger.info(f"{ticker_pair}: BUY @ price: ${ask_price}")
+                    logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
                     break
                 elif action == TradeAction.SELL:
-                    logger.info(f"{ticker_pair}: SELL @ ${ask_price}")
-                    self.handle_sell_order(ticker_pair, float(avg_position.shares), float(ask_price))
+                    logger.info(f"{ticker_pair}: executing SELL @ ask price ${ask_price}")
+                    self.handle_sell_order(ticker_pair, float(avg_position["amount"]), float(ask_price))
                     break
-
+            
+            expected_profit = calculate_profit_percent(avg_position, ticker_info)
+            logger.info(f"{ticker_pair}: executed {action} action, expected profit: {expected_profit}")
             time.sleep(self.inter_currency_sleep_interval)
     
     def handle_buy_order(self, ticker_pair: str):
@@ -170,18 +172,17 @@ class CryptoBot:
         self.remaining_balance -= self.amount_per_transaction
 
         self.mongodb_service.insert_one(self.current_positions_collection, order)
-        logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, amount: {order['filled']}, fees: {order['fee']['cost']}, cost: {order['cost']}")
+        logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
 
     def handle_sell_order(self, ticker_pair: str, shares: float, ask_price: float):
-        order = self.create_sell_order(ticker_pair,  shares, ask_price)
+        order = self.create_sell_order(ticker_pair, shares, ask_price)
 
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute set order")
             return
 
-        profit = order['info']['total_value_after_fees']
-        logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, amount: {order['filled']}, proceeds: {profit}")
+        proceeds = order['info']['total_value_after_fees']
         ticker_filter = {
             'symbol': ticker_pair
         }
@@ -195,7 +196,10 @@ class CryptoBot:
         self.mongodb_service.delete_many(self.current_positions_collection, ticker_filter)
 
         if self.reinvestment_percent > ZERO:
-            self.remaining_balance += (Decimal(profit) * self.reinvestment_percent)
+            self.remaining_balance += (Decimal(proceeds) * self.reinvestment_percent)
+
+        logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
+
     
     def fetch_ohlcv(self, ticker_pair:str):
         try:
@@ -258,7 +262,7 @@ class CryptoBot:
             status = order_results['status']
             while (status != 'closed'):
                 time.sleep(1)
-                order = self.fetch_order(self.exchange, order_id)
+                order = self.fetch_order(order_id)
                 if (order == None):
                     return None
             
@@ -293,7 +297,7 @@ class CryptoBot:
             status = order_results['status']
             while (status != 'closed'):
                 time.sleep(1)
-                order = self.fetch_order(self.exchange, order_id)
+                order = self.fetch_order(order_id)
                 if (order == None):
                     return None
             
@@ -376,15 +380,24 @@ class CryptoBot:
             return None
 
 
-    def calculate_avg_position(self, ticker_pair, trades):
+    def calculate_avg_position(self, trades):
         if len(trades) == 0:
             return None
         
-        avg_position = Trade(ticker_pair, Decimal(0), Decimal(0), Decimal(0))
-        for trade in trades:
-            price = Decimal(trade['average'])
-            shares = Decimal(trade['filled'])
-            fee = Decimal(trade['fee']['cost'])
-            avg_position.updateCostBasis(price, shares, fee)
+        average_trade = trades[0]
 
-        return avg_position
+        for idx, trade in enumerate(trades):
+            if idx == 0:
+                continue
+
+            shares = trade["filled"]
+            fee = trade["fee"]["cost"]
+
+            average_trade["filled"] += shares
+            average_trade["amount"] += shares
+            average_trade["fee"]["cost"] += fee
+            average_trade["cost"] += trade["cost"]
+            average_trade["price"] = average_trade["cost"]/average_trade["amount"]
+            average_trade["average"] = average_trade["cost"]/average_trade["amount"]
+
+        return average_trade

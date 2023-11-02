@@ -7,6 +7,7 @@ class Trade:
         self.price = price
         self.shares = shares
         self.fee = fee
+        self.total_cost = Decimal(0)
         self.num_trades = 0
 
     def updateCostBasis(self, price: Decimal, shares: Decimal, fee: Decimal):

@@ -1,5 +1,5 @@
 {
-    "max_spend": 50,
+    "max_spend": 0,
     "amount_per_transaction": 5,
     "reinvestment_percent": 0,
     "sleep_interval": 20,
@@ -16,7 +16,7 @@
             "name": "TAKE_PROFIT",
             "priority": 0,
             "parameters": {
-                "threshold_percent": 10
+                "threshold_percent": 5
             } 
         },
         {
@@ -151,5 +151,12 @@
         "ETH",
         "BTC"
     ],
-    "blacklisted_currencies": []
+    "blacklisted_currencies": [
+        "USDC",
+        "TRB",
+        "ACLX",
+        "BOND",
+        "VGX",
+        "CGLD"
+    ]
 }
