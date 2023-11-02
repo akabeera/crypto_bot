@@ -79,5 +79,5 @@ ATOM_TRADE_JSON = """{
     "stopLossPrice": null
   }"""
 
-ATOM_SINGLE_TRADE = json.loads(ATOM_TRADE_JSON)
+ATOM_TRADE = json.loads(ATOM_TRADE_JSON)
 

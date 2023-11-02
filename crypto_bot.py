@@ -8,7 +8,7 @@ from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, E
 from dotenv import load_dotenv
 
 from strategies.strategy_factory import strategy_factory
-from strategies.utils import calculate_profit_percent
+from strategies.utils import calculate_profit_percent, calculate_avg_position
 from trading.trade_action import TradeAction
 from trading.trade import Trade
 from utils.mongodb_service import MongoDBService
@@ -119,7 +119,7 @@ class CryptoBot:
                 'symbol': ticker_pair
             }
             trades = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
-            avg_position = self.calculate_avg_position(trades)            
+            avg_position = calculate_avg_position(trades)            
 
             ohlcv = self.fetch_ohlcv(ticker_pair)
             if ohlcv == None or len(ohlcv) == 0:
@@ -381,26 +381,3 @@ class CryptoBot:
         except NetworkError as e:
             logger.warn("fetch_order network error {}, error: {}".format(orderId, e)) 
             return None
-
-
-    def calculate_avg_position(self, trades):
-        if len(trades) == 0:
-            return None
-        
-        average_trade = trades[0]
-
-        for idx, trade in enumerate(trades):
-            if idx == 0:
-                continue
-
-            shares = trade["filled"]
-            fee = trade["fee"]["cost"]
-
-            average_trade["filled"] += shares
-            average_trade["amount"] += shares
-            average_trade["fee"]["cost"] += fee
-            average_trade["cost"] += trade["cost"]
-            average_trade["price"] = average_trade["cost"]/average_trade["amount"]
-            average_trade["average"] = average_trade["cost"]/average_trade["amount"]
-
-        return average_trade
