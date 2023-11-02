@@ -128,6 +128,9 @@ class CryptoBot:
 
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
             ticker_info = self.fetch_ticker(ticker_pair)
+
+            print(ticker_info)
+
             if (not ticker_info or ticker_info['ask'] is None):
                 logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
