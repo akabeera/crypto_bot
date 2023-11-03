@@ -18,3 +18,25 @@ def calculate_profit_percent(avg_position, ticker_info) -> Decimal:
     profit_after_fees_pct = profit_after_fees/cost
 
     return profit_after_fees_pct
+
+def calculate_avg_position(trades):
+    if len(trades) == 0:
+        return None
+    
+    average_trade = trades[0]
+
+    for idx, trade in enumerate(trades):
+        if idx == 0:
+            continue
+
+        shares = trade["filled"]
+        fee = trade["fee"]["cost"]
+
+        average_trade["filled"] += shares
+        average_trade["amount"] += shares
+        average_trade["fee"]["cost"] += fee
+        average_trade["cost"] += trade["cost"]
+        average_trade["price"] = average_trade["cost"]/average_trade["amount"]
+        average_trade["average"] = average_trade["cost"]/average_trade["amount"]
+
+    return average_trade
