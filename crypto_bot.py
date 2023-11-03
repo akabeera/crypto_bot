@@ -47,6 +47,7 @@ class CryptoBot:
         self.amount_per_transaction = Decimal(self.config["amount_per_transaction"])
         self.reinvestment_percent = Decimal(self.config["reinvestment_percent"]/100)
         self.remaining_balance = self.max_spend
+        self.limit_order_time_limit = 10
 
         self.currency: str = self.config["currency"]
         self.sleep_interval = self.config["sleep_interval"]
@@ -129,8 +130,6 @@ class CryptoBot:
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
             ticker_info = self.fetch_ticker(ticker_pair)
 
-            print(ticker_info)
-
             if (not ticker_info or ticker_info['ask'] is None):
                 logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
@@ -179,7 +178,7 @@ class CryptoBot:
 
 
     def handle_sell_order(self, ticker_pair: str, shares: float, ask_price: float):
-        order = self.create_sell_order(ticker_pair, shares, ask_price)
+        order = self.create_sell_limit_order(ticker_pair, shares, ask_price)
 
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute set order")
@@ -324,11 +323,11 @@ class CryptoBot:
             logger.warn("create_sell_order exchange error {}, error: {}".format(ticker_pair, e)) 
             if e.args and len(e.args) > 0:
                 if e.args[0] == 'coinbase {"error":"PERMISSION_DENIED","error_details":"Orderbook is in limit only mode","message":"Orderbook is in limit only mode"}':
-                    return self.create_limit_order(ticker_pair, shares, price)
+                    return self.create_sell_limit_order(ticker_pair, shares, price)
 
             return None
             
-    def create_limit_order(self, ticker_pair, amount: float, price: float):
+    def create_sell_limit_order(self, ticker_pair, amount: float, price: float):
         try:
             type = "limit"
             side = "sell"
@@ -337,30 +336,41 @@ class CryptoBot:
 
             order = None
             status = order_results['status']
+            idx = 0
             while (status != 'closed'):
+                
+                if idx == self.limit_order_time_limit:
+                    logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
+                    cancelled_order = self.exchange.cancel_order(order_id, ticker_pair) 
+                    logger.warn(f"{ticker_pair}: cancelled_order output: {cancelled_order}")
+                    return  None
+
+                logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
+
                 time.sleep(1)
                 order = self.fetch_order(order_id)
                 if (order == None):
                     return None
-            
+                
+                idx += 1
                 status = order['status']
 
             return order
 
         except BadSymbol as e:
-            logger.error("unable to submit create_limit_order for ticker {}, error: {}".format(ticker_pair, e))
+            logger.error("create_sell_limit_order unable to submit order for ticker {}, error: {}".format(ticker_pair, e))
             return None
         except RequestTimeout as e:
-            logger.warn("create_limit_order request timed out for {}, error: {}".format(ticker_pair, e))
+            logger.warn("create_sell_limit_order request timed out for {}, error: {}".format(ticker_pair, e))
             return None
         except AuthenticationError as e:
-            logger.warn("create_limit_order request timed out for {}, error: {}".format(ticker_pair, e))
+            logger.warn("create_sell_limit_order request timed out for {}, error: {}".format(ticker_pair, e))
             return None
         except NetworkError as e:
-            logger.warn("create_limit_order network error {}, error: {}".format(ticker_pair, e)) 
+            logger.warn("create_sell_limit_order network error {}, error: {}".format(ticker_pair, e)) 
             return None
         except ExchangeError as e:
-            logger.warn("create_limit_order exchange error {}, error: {}".format(ticker_pair, e)) 
+            logger.warn("create_sell_limit_order exchange error {}, error: {}".format(ticker_pair, e)) 
             return None
 
     def fetch_order(self, orderId):
