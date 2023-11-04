@@ -130,11 +130,12 @@ class CryptoBot:
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
             ticker_info = self.fetch_ticker(ticker_pair)
 
-            if (not ticker_info or ticker_info['ask'] is None):
-                logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
+            if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
+                logger.error(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
                 continue
 
             ask_price = ticker_info['ask']
+            bid_price = ticker_info['bid']
     
             for priority in self.strategies_priorities:
                 cuurrent_strategies = self.strategies[priority]
@@ -154,8 +155,8 @@ class CryptoBot:
                     self.handle_buy_order(ticker_pair)
                     break
                 elif action == TradeAction.SELL:
-                    logger.info(f"{ticker_pair}: executing SELL @ ask price ${ask_price}")
-                    self.handle_sell_order(ticker_pair, float(avg_position["amount"]), float(ask_price))
+                    logger.info(f"{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}")
+                    self.handle_sell_order(ticker_pair, float(avg_position["amount"]), float(bid_price))
                     break
             
             expected_profit = calculate_profit_percent(avg_position, ticker_info)
@@ -177,8 +178,8 @@ class CryptoBot:
         logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
 
-    def handle_sell_order(self, ticker_pair: str, shares: float, ask_price: float):
-        order = self.create_sell_limit_order(ticker_pair, shares, ask_price)
+    def handle_sell_order(self, ticker_pair: str, shares: float, bid_price: float):
+        order = self.create_sell_limit_order(ticker_pair, shares, bid_price)
 
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute set order")
@@ -343,7 +344,7 @@ class CryptoBot:
                     logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
                     cancelled_order = self.exchange.cancel_order(order_id, ticker_pair) 
                     logger.warn(f"{ticker_pair}: cancelled_order output: {cancelled_order}")
-                    return  None
+                    return None
 
                 logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
