@@ -4,7 +4,7 @@ ATOM_TICKER_INFO_JSON = """{
     "symbol": "ATOM/USD", 
     "timestamp": 1698926118870,
     "datetime": "2023-11-02T11:55:18.870307Z",
-    "bid": 7.93, 
+    "bid": 7.94, 
     "ask": 7.94, 
     "last": 7.94, 
     "high": null, 
