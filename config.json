@@ -11,6 +11,13 @@
         "current_positions_collection": "trades",
         "closed_positions_collection" : "sell_orders"
     },
+    "exchange": {
+        "exchange_id": "coinbase",
+        "market_order_type_buy": "market",
+        "market_order_type_sell": "limit",
+        "limit_order_time_limit": 10,
+        "create_market_buy_order_requires_price": false
+    },
     "strategies": [
         {
             "name": "TAKE_PROFIT",
