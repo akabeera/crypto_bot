@@ -3,6 +3,7 @@ from decimal import *
 
 from .base_strategy import BaseStrategy
 from trading.trade_action import TradeAction
+from utils.logger import logger
 
 class RSI(BaseStrategy):
     def __init__(self, config):
@@ -15,6 +16,8 @@ class RSI(BaseStrategy):
         self.overbought_signal_threshold = parameters["overbought_signal_threshold"]
         self.oversold_signal_threshold = parameters["oversold_signal_threshold"]
 
+        super().__init__(config)
+
 
     def eval(self, avg_position, candles_df, ticker_info):
         rsi_key = "RSI"
@@ -25,8 +28,10 @@ class RSI(BaseStrategy):
 
         action = TradeAction.NOOP
         if rsi > 70:
+            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
         elif rsi < 32:
+            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:

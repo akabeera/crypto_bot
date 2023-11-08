@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from strategies.strategy_factory import strategy_factory
 from strategies.utils import calculate_profit_percent, calculate_avg_position
 from trading.trade_action import TradeAction
-from trading.trade import Trade
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 from utils.constants import ZERO
@@ -100,15 +99,18 @@ class CryptoBot:
                 continue     
 
             ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchOHLCV")
-            #ohlcv = self.fetch_ohlcv(ticker_pair)
             if ohlcv == None or len(ohlcv) == 0:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
 
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
-            #ticker_info = self.fetch_ticker(ticker_pair)
-            ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
 
+            r, c = candles_df.shape
+            if r < 4:
+                logger.warn(f"{ticker_pair}: not enough candles({r}), skipping")
+                continue
+
+            ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
             if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
                 logger.error(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
                 continue

@@ -3,6 +3,7 @@ from decimal import *
 
 from .base_strategy import BaseStrategy
 from trading.trade_action import TradeAction
+from utils.logger import logger
 
 class MACD(BaseStrategy):
     def __init__(self, config):
@@ -10,6 +11,8 @@ class MACD(BaseStrategy):
         self.prevent_loss = True
         if "prevent_loss" in config:
             self.prevent_loss = config["prevent_loss"]
+
+        super().__init__(config)
 
 
     def eval(self, avg_position, candles_df, ticker_info):
@@ -22,10 +25,16 @@ class MACD(BaseStrategy):
         macd = last_row[macd_key]
         macd_signal = last_row[macd_signal_key]
 
+        prev_row = candles_df.iloc[-3]
+        prev_macd = prev_row[macd_key]
+        prev_macd_signal = prev_row[macd_signal_key]
+
         action = TradeAction.NOOP
-        if macd_signal < macd:
+        if macd_signal < macd and prev_macd_signal > prev_macd:
+            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
-        elif macd_signal > macd:
+        elif macd_signal > macd and prev_macd_signal < prev_macd:
+            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:
