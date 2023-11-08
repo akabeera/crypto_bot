@@ -6,20 +6,13 @@ from utils.mongodb_service import MongoDBService
 
 load_dotenv()
 
-if __name__ == "__main__":
+def closed_positions_performance(mongo_connection_string, db_name, table_name):
+    mongodb_service = MongoDBService(mongo_connection_string, db_name)
+    closed_positions = mongodb_service.query(table_name)
 
-    MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
-    DB_NAME = "crypto-bot"
-
-    SELL_ORDERS_COLLECTION = "sell_orders"
-
-    mongodb_service = MongoDBService(MONGO_CONNECTION_STRING, DB_NAME)
-    closed_positions = mongodb_service.query(SELL_ORDERS_COLLECTION)
-
-    print(f"Number of Sell Orders: {len(closed_positions)}")
+    print(f"Number of Trades: {len(closed_positions)}")
 
     ticker_dict = {}
-    monthly_dict = {}
 
     SELL_ORDER = "sell_order"
     CLOSED_POSITIONS = "closed_positions"
@@ -49,7 +42,6 @@ if __name__ == "__main__":
         ticker_object["sell_fee"] += sell_fee
         ticker_object["sell_amount"] += sell_amount
 
-
         for cp in closed_positions:
             ticker_object["buy_amount"] += Decimal(cp["cost"])
             ticker_object["buy_fee"] += Decimal(cp["fee"]["cost"])
@@ -57,9 +49,31 @@ if __name__ == "__main__":
     total_profit = Decimal(0)
     for ticker, ticker_info in ticker_dict.items():
         profit = ticker_info["sell_amount"] - ticker_info["sell_fee"] - ticker_info["buy_amount"] - ticker_info["buy_fee"]
+        ticker_info["profit"] = profit 
         total_profit += profit
 
-        print("{:15s} {:35.30f} {:4d}".format(ticker, profit, ticker_info["count"]))
+    sorted_by_profit = sorted(ticker_dict.items(), key=lambda item: item[1]["profit"], reverse=True)
+    
+    for item in sorted_by_profit:
+        ticker_info = item[1]
+        print("{:15s} {:35.30f} {:4d}".format(ticker_info["ticker"], ticker_info["profit"], ticker_info["count"]))
     
     
     print(f"Total Performance($): ${total_profit}")
+    
+
+def open_positions_performance(mongo_connection_string, db_name, table_name):
+    mongodb_service = MongoDBService(mongo_connection_string, db_name)
+    open_positions = mongodb_service.query(table_name)
+
+if __name__ == "__main__":
+
+    MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
+    DB_NAME = "crypto-bot"
+
+    SELL_ORDERS_COLLECTION = "sell_orders"
+    TRADES_COLLECTION = "TRADES"
+
+    closed_positions_performance(MONGO_CONNECTION_STRING, DB_NAME, SELL_ORDERS_COLLECTION)
+    open_positions_performance(MONGO_CONNECTION_STRING, DB_NAME, TRADES_COLLECTION)
+

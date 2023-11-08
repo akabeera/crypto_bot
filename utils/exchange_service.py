@@ -5,25 +5,9 @@ import time
 from dotenv import load_dotenv
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
 
-import logging
-import logging.config
+from utils.logger import logger
 
 load_dotenv()
-
-logger = logging.getLogger(__name__)
-
-def configureLogger(logLevel: str):
-    logging.config.fileConfig("./config/logging.conf", disable_existing_loggers=False)
-
-    if (not logLevel): return
-    numeric_level = getattr(logging, logLevel.upper(), None)
-    if  not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % logLevel)
-
-    logging.getLogger().setLevel(numeric_level)
-
-configureLogger("INFO")
-
 API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
 
@@ -64,7 +48,7 @@ class ExchangeService:
             self.limit_order_time_limit = exchange_config["limit_order_time_limit"]
 
 
-    def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, order_type:str = None, order_id: str = None):
+    def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, total_cost = None, order_type:str = None, order_id: str = None):
         try:
             if not self.exchange_client.has[op]:
                 logger.warn(f"{ticker_pair}: exchange does not support op:{op}")
@@ -77,13 +61,18 @@ class ExchangeService:
             elif op == "fetchOrder":
                 order = self.exchange_client.fetch_order(order_id)
                 return order
-            elif op == "createOrder":
-                if (self.market_order_type_buy == "limit" or self.market_order_type_sell == "limit") and price is None:
-                    logger.error(f"{ticker_pair}: unable to execute a limit order with an empty price, aborting")
-                    return None
-                
+            elif op == "createOrder":                
                 market_order_type = self.market_order_type_buy if order_type == "buy" else self.market_order_type_sell
-                return self.create_order(ticker_pair, shares, market_order_type, order_type, price)
+
+                if order_type == "buy" and market_order_type == "market":
+                    return self.create_market_buy_order(ticker_pair, total_cost)
+                if order_type == "sell" and market_order_type == "market":
+                    return self.create_market_sell_order(ticker_pair, shares)
+                else:
+                    if price is None:
+                        logger.error(f"{ticker_pair}: unable to execute limit order with empty price")
+                    return self.create_order(ticker_pair, shares, market_order_type, order_type, price)
+         
             elif op == "cancelOrder":
                  self.exchange_client.cancel_order(order_id, ticker_pair)
                  return None
@@ -123,7 +112,7 @@ class ExchangeService:
             if idx == self.limit_order_time_limit:
                 logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
                 self.execute_op(ticker_pair=ticker_pair, op="cancelOrder", order_id=order_id)
-                logger.warn(f"{ticker_pair}: cancelled_order")
+                logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
                 return None
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
@@ -137,5 +126,36 @@ class ExchangeService:
             status = order['status']
 
         return order
+    
+    def create_market_buy_order(self, ticker_pair: str, amount: float):
 
-            
+        order_results = self.exchange_client.create_market_buy_order(ticker_pair, amount)
+        order_id = order_results['info']['order_id']
+
+        order = None
+        status = order_results['status']
+        while (status != 'closed'):
+            time.sleep(1)
+            order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", order_id=order_id)
+            if (order == None):
+                return None
+
+            status = order['status']
+
+        return order
+
+    def create_market_sell_order(self, ticker_pair, shares: float):
+        order_results = self.exchange.create_market_sell_order(ticker_pair, shares)
+        order_id = order_results['info']['order_id']
+
+        order = None
+        status = order_results['status']
+        while (status != 'closed'):
+            time.sleep(1)
+            order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", order_id=order_id)
+            if (order == None):
+                return None
+
+            status = order['status']
+
+        return order

@@ -12,25 +12,9 @@ from trading.trade import Trade
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 from utils.constants import ZERO
-
-import logging
-import logging.config
+from utils.logger import logger
 
 load_dotenv()
-
-logger = logging.getLogger(__name__)
-
-def configureLogger(logLevel: str):
-    logging.config.fileConfig("./config/logging.conf", disable_existing_loggers=False)
-
-    if (not logLevel): return
-    numeric_level = getattr(logging, logLevel.upper(), None)
-    if  not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % logLevel)
-
-    logging.getLogger().setLevel(numeric_level)
-
-configureLogger("INFO")
 
 CONFIG_FILE = 'config.json'
 API_KEY = os.getenv('API_KEY')
@@ -105,16 +89,15 @@ class CryptoBot:
             idx += 1 
 
             ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())
-
-            if ticker in self.crypto_blacklist:
-                logger.info(f"{ticker_pair}: blacklisted, skipping")
-                continue
-
             ticker_filter = {
                 'symbol': ticker_pair
             }
             trades = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
-            avg_position = calculate_avg_position(trades)            
+            avg_position = calculate_avg_position(trades)       
+
+
+            if ticker in self.crypto_blacklist and avg_position is None:
+                continue     
 
             ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchOHLCV")
             #ohlcv = self.fetch_ohlcv(ticker_pair)
@@ -146,17 +129,16 @@ class CryptoBot:
                             action = TradeAction.NOOP
                             break
 
-                if action == TradeAction.BUY:
+                if action == TradeAction.BUY and ticker not in self.crypto_blacklist:
                     logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
                     break
                 elif action == TradeAction.SELL:
-                    logger.info(f"{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}")
+                    logger.info(f'{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}')
                     self.handle_sell_order(ticker_pair, float(avg_position["amount"]), float(bid_price))
                     break
             
             expected_profit = calculate_profit_percent(avg_position, ticker_info)
-            logger.info(f"{ticker_pair}: executed {action} action, expected profit: {expected_profit}")
             time.sleep(self.inter_currency_sleep_interval)
     
     def handle_buy_order(self, ticker_pair: str):
@@ -165,7 +147,7 @@ class CryptoBot:
             return
         
         #order = self.create_buy_order(ticker_pair, self.amount_per_transaction)
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", price=self.amount_per_transaction, order_type="buy")
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", total_cost=self.amount_per_transaction, order_type="buy")
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
             return

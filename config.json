@@ -154,16 +154,15 @@
         "SOL",
         "ADA",
         "DOGE",
-        "USDC",
         "ETH",
         "BTC"
     ],
     "blacklisted_currencies": [
-        "USDC",
         "TRB",
         "ACLX",
         "BOND",
         "VGX",
-        "CGLD"
+        "CGLD",
+        "REN"
     ]
 }
