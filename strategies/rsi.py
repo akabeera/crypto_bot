@@ -27,10 +27,10 @@ class RSI(BaseStrategy):
         rsi = last_row[rsi_key]
 
         action = TradeAction.NOOP
-        if rsi > 70:
+        if rsi > self.overbought_signal_threshold:
             logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
-        elif rsi < 32:
+        elif rsi < self.oversold_signal_threshold:
             logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 

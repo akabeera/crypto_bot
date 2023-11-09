@@ -1,8 +1,8 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.trade_action import TradeAction
 from utils.logger import logger
+from utils.trading import TradeAction
 
 class BollingerBands(BaseStrategy):
     def __init__(self, config):

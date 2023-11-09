@@ -23,7 +23,7 @@
             "name": "TAKE_PROFIT",
             "priority": 0,
             "parameters": {
-                "threshold_percent": 2
+                "threshold_percent": 6
             } 
         },
         {
@@ -48,7 +48,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 32
+                "oversold_signal_threshold": 30
             }
         },
         {
