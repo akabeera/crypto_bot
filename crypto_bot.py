@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from strategies.strategy_factory import strategy_factory
 from strategies.utils import calculate_profit_percent, calculate_avg_position
-from trading.trade_action import TradeAction
+from utils.trading import TradeAction
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 from utils.constants import ZERO

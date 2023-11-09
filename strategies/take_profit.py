@@ -1,9 +1,9 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.trade_action import TradeAction
 from strategies.utils import calculate_profit_percent
 from utils.logger import logger
+from utils.trading import TradeAction
 
 class TakeProfit(BaseStrategy):
     def __init__(self, config):
@@ -19,7 +19,7 @@ class TakeProfit(BaseStrategy):
         profit = calculate_profit_percent(avg_position, ticker_info)
 
         if profit >= self.threshold_percent:
-            logger.info(f'{avg_position["symbol"]}: {self.name} triggered SELL signal')
+            logger.info(f'{avg_position["symbol"]}: {self.name} triggered SELL signal, expected profit: ${profit}')
             return TradeAction.SELL
         
         return TradeAction.HOLD

@@ -2,8 +2,8 @@ import talib
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.trade_action import TradeAction
 from utils.logger import logger
+from utils.trading import TradeAction
 
 class MACD(BaseStrategy):
     def __init__(self, config):
@@ -30,10 +30,10 @@ class MACD(BaseStrategy):
         prev_macd_signal = prev_row[macd_signal_key]
 
         action = TradeAction.NOOP
-        if macd_signal < macd and prev_macd_signal > prev_macd:
+        if macd_signal < macd and macd_signal > 0:
             logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
-        elif macd_signal > macd and prev_macd_signal < prev_macd:
+        elif macd_signal > macd and macd_signal < 0:
             logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 

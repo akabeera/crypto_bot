@@ -3,6 +3,8 @@ from decimal import *
 
 from dotenv import load_dotenv
 from utils.mongodb_service import MongoDBService
+from utils.trading import calculate_profit_percent, calculate_avg_position
+from utils.exchange_service import ExchangeService
 
 load_dotenv()
 
@@ -66,14 +68,44 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
     mongodb_service = MongoDBService(mongo_connection_string, db_name)
     open_positions = mongodb_service.query(table_name)
 
+    exchange_config = {
+        'exchange_id': "coinbase",
+        'market_order_type_buy': "market",
+        'market_order_type_sell': "limit",
+        'limit_order_time_limit': 10,
+        'create_market_buy_order_requires_price': False
+    }
+    exchange_service = ExchangeService(exchange_config)
+
+    trades_dict = {}
+    for position in open_positions:
+        symbol = position["symbol"]
+        if symbol not in trades_dict:
+            trades_dict[symbol] = [position]
+        else: 
+            trades_dict[symbol].append(position)
+
+    print("\nOpen Positions\n")
+    for symbol, trades in trades_dict.items():
+        ticker_info = exchange_service.execute_op(ticker_pair=symbol, op="fetchTicker")
+        if not ticker_info:
+            print("{:15s} {:35s} {:4s}".format(symbol, "--", "--"))
+            continue
+
+        avg_position = calculate_avg_position(trades)
+        profit_pct = calculate_profit_percent(avg_position, ticker_info) * 100
+
+        print("{:15s} {:35.30f}% {:4d}".format(symbol, profit_pct, len(trades)))
+        
+
 if __name__ == "__main__":
 
     MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
     DB_NAME = "crypto-bot"
 
     SELL_ORDERS_COLLECTION = "sell_orders"
-    TRADES_COLLECTION = "TRADES"
+    TRADES_COLLECTION = "trades"
 
-    closed_positions_performance(MONGO_CONNECTION_STRING, DB_NAME, SELL_ORDERS_COLLECTION)
+    closed_positions_performance(MONGO_CONNECTION_STRING, DB_NAME, SELL_ORDERS_COLLECTION)    
     open_positions_performance(MONGO_CONNECTION_STRING, DB_NAME, TRADES_COLLECTION)
 

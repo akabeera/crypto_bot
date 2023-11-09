@@ -1,7 +1,7 @@
 from decimal import *
-from trading.trade_action import TradeAction
 from strategies.utils import calculate_profit_percent
 from utils.logger import logger
+from utils.trading import TradeAction
 
 class BaseStrategy:
     def __init__(self, config):

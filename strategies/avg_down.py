@@ -1,9 +1,9 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.trade_action import TradeAction
 from strategies.utils import calculate_profit_percent
 from utils.logger import logger
+from utils.trading import TradeAction
 
 class AverageDown(BaseStrategy):
 
