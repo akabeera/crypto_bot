@@ -1,7 +1,8 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from trading.trade_action import TradeAction
+from utils.logger import logger
+from utils.trading import TradeAction
 
 class BollingerBands(BaseStrategy):
     def __init__(self, config):
@@ -13,6 +14,8 @@ class BollingerBands(BaseStrategy):
         parameters = config["parameters"]
         self.window = parameters["window"]
         self.std_dev = parameters["std_dev"]
+        
+        super().__init__(config)
 
 
     def eval(self, avg_position, candles_df, ticker_info):
@@ -32,8 +35,10 @@ class BollingerBands(BaseStrategy):
 
         action = TradeAction.NOOP
         if close > upper_band:
+            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action =  TradeAction.SELL
         elif close < lower_band:
+            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:
