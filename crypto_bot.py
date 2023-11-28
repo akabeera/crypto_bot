@@ -80,7 +80,7 @@ class CryptoBot:
         while True:
 
             if idx == N:
-                logger.info(f"heartbeat!")
+                logger.debug(f"heartbeat!")
                 time.sleep(self.sleep_interval)
                 idx = 0
 
@@ -136,11 +136,11 @@ class CryptoBot:
                     self.handle_buy_order(ticker_pair)
                     break
                 elif action == TradeAction.SELL:
-                    logger.info(f'{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}')
+                    expected_profit = calculate_profit_percent(avg_position, ticker_info)
+                    logger.info(f'{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}, expected_profit: {expected_profit}')
                     self.handle_sell_order(ticker_pair, float(avg_position["amount"]), float(bid_price))
                     break
             
-            expected_profit = calculate_profit_percent(avg_position, ticker_info)
             time.sleep(self.inter_currency_sleep_interval)
     
     def handle_buy_order(self, ticker_pair: str):

@@ -31,10 +31,10 @@ class MACD(BaseStrategy):
 
         action = TradeAction.NOOP
         if macd_signal < macd and macd_signal > 0:
-            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
         elif macd_signal > macd and macd_signal < 0:
-            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:

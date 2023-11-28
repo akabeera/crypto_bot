@@ -101,15 +101,28 @@ class ExchangeService:
         
     def create_order(self, ticker_pair: str, shares: float, type: str, side: str, price: float = None):
 
+        print(f"ORDER: {price}")
+        
         order_results = self.exchange_client.create_order(ticker_pair, type, side, shares, price)
         order_id = order_results['info']['order_id']
 
         order = None
         status = order_results['status']
         idx = 0
+        filled = 0
         while (status != 'closed'):
+            prev_filled = filled
             
             if idx == self.limit_order_time_limit:
+
+                if order is not None:
+                    filled = order["filled"]
+
+                if filled > prev_filled:
+                    logger.info(f"{ticker_pair}: order is still being filled, extending time")
+                    idx = 0
+                    continue
+
                 logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
                 self.execute_op(ticker_pair=ticker_pair, op="cancelOrder", order_id=order_id)
                 logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
@@ -117,7 +130,7 @@ class ExchangeService:
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
-            time.sleep(1)
+            time.sleep(2)
             order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", order_id=order_id)
             if (order == None):
                 return None

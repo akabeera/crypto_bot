@@ -20,7 +20,7 @@ class AverageDown(BaseStrategy):
         profit_percent = calculate_profit_percent(avg_position, ticker_info)
 
         if profit_percent < self.threshold_percent:
-            logger.info(f'{ticker_info["symbol"]}: strategy {self.name} trigger BUY signal')
+            logger.debug(f'{ticker_info["symbol"]}: strategy {self.name} trigger BUY signal')
             return TradeAction.BUY
         
         return TradeAction.HOLD
