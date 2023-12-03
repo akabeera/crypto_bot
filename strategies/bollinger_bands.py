@@ -35,10 +35,10 @@ class BollingerBands(BaseStrategy):
 
         action = TradeAction.NOOP
         if close > upper_band:
-            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action =  TradeAction.SELL
         elif close < lower_band:
-            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:

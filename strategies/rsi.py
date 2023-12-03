@@ -21,17 +21,17 @@ class RSI(BaseStrategy):
 
     def eval(self, avg_position, candles_df, ticker_info):
         rsi_key = "RSI"
-        candles_df[rsi_key] = talib.RSI(candles_df['close'])
+        candles_df[rsi_key] = talib.RSI(candles_df['close'] * 100000)
 
         last_row = candles_df.iloc[-1]
         rsi = last_row[rsi_key]
 
         action = TradeAction.NOOP
         if rsi > self.overbought_signal_threshold:
-            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
         elif rsi < self.oversold_signal_threshold:
-            logger.info(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal, RSI: {rsi}')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:

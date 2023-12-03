@@ -16,8 +16,8 @@ class BaseStrategy:
             return TradeAction.NOOP
         
         profit_pct = calculate_profit_percent(avg_position, ticker_info)
-        if profit_pct < Decimal(0):
-            logger.info(f'{ticker_info["symbol"]}: {self.name} prevent_loss forced HOLD signal, profit: {profit_pct}')
+        if profit_pct < Decimal(.005):
+            logger.debug(f'{ticker_info["symbol"]}: {self.name} prevent_loss forced HOLD signal, profit: {profit_pct}')
             curr_action = TradeAction.HOLD
             
         return curr_action

@@ -85,6 +85,7 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
         else: 
             trades_dict[symbol].append(position)
 
+    total_market_value = 0
     print("\nOpen Positions\n")
     for symbol, trades in trades_dict.items():
         ticker_info = exchange_service.execute_op(ticker_pair=symbol, op="fetchTicker")
@@ -94,9 +95,13 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
 
         avg_position = calculate_avg_position(trades)
         profit_pct = calculate_profit_percent(avg_position, ticker_info) * 100
-
-        print("{:15s} {:35.30f}% {:4d}".format(symbol, profit_pct, len(trades)))
+        price = ticker_info["bid"]
+        shares = avg_position["amount"]
+        market_value = price * shares
+        total_market_value += market_value
+        print("{:10s} {:20.9f} ${:20.15f} {:7.4f}% {:4d}".format(symbol, shares, market_value, profit_pct, len(trades)))
         
+    print(f"\nTotal Market Value: {total_market_value}")
 
 if __name__ == "__main__":
 

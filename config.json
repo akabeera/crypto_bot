@@ -1,6 +1,6 @@
 {
-    "max_spend": 0,
-    "amount_per_transaction": 5,
+    "max_spend": 100,
+    "amount_per_transaction": 10,
     "reinvestment_percent": 0,
     "sleep_interval": 20,
     "currency": "USD",
@@ -23,14 +23,14 @@
             "name": "TAKE_PROFIT",
             "priority": 0,
             "parameters": {
-                "threshold_percent": 6
+                "threshold_percent": 4
             } 
         },
         {
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 25,
+                "threshold_percent": 20,
                 "num_times": 2
             } 
         },
@@ -48,7 +48,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 30
+                "oversold_signal_threshold": 25
             }
         },
         {
@@ -61,19 +61,15 @@
         "WCFG",
         "AVT",
         "SHPING",
-        "RAI",
-        "FOX",
         "SUKU",
         "KRL",
         "ASM",
         "RARI",
         "COVAL",
         "FARM",
-        "GYEN",
         "TRB",
         "BOND",
         "ACLX",
-        "QUICK",
         "MDT",
         "PERP",
         "LCX",
@@ -82,7 +78,6 @@
         "BADGER",
         "MLN",
         "BTRST",
-        "VGX",
         "AGLD",
         "OXT",
         "OGN",
@@ -110,7 +105,6 @@
         "LPT",
         "SKL",
         "BAND",
-        "ANT",
         "FET",
         "IOTX",
         "JASMY",
@@ -122,7 +116,6 @@
         "MASK",
         "LRC",
         "ZEC",
-        "PAX",
         "COMP",
         "CRV",
         "MANA",
@@ -145,7 +138,6 @@
         "DAI",
         "AVAX",
         "SHIB",
-        "WBTC",
         "BCH",
         "DOT",
         "LTC",
@@ -157,14 +149,13 @@
         "BTC"
     ],
     "blacklisted_currencies": [
+        "WBTC",
         "TRB",
         "ACLX",
-        "VGX",
         "CGLD",
         "SKL",
         "CRV",
         "ADA",
-        "API3",
         "GRT",
         "ALGO",
         "AGLD",
@@ -174,8 +165,6 @@
         "TRU",
         "CRO",
         "BAT",
-        "XLM",
-        "LTC",
         "MASK",
         "ANKR",
         "PERP",
@@ -184,18 +173,15 @@
         "JASMY",
         "OGN",
         "ZEC",
-        "POLY",
         "AXS",
         "STORJ",
         "UMA",
-        "ETH",
         "QNT",
         "ETC",
         "LCX",
         "AUCTION",
         "CVC",
         "NMR",
-        "BTC",
         "SHPING",
         "KNC",
         "BCH",
@@ -203,7 +189,6 @@
         "FARM",
         "MLN",
         "COVAL",
-        "UNI",
         "ARPA",
         "REQ",
         "TRAC",
@@ -220,6 +205,7 @@
         "BAL",
         "AVT",
         "FET",
-        "MKR"
+        "MKR",
+        "POLY"
     ]
 }

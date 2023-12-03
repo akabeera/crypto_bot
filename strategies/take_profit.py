@@ -19,7 +19,7 @@ class TakeProfit(BaseStrategy):
         profit = calculate_profit_percent(avg_position, ticker_info)
 
         if profit >= self.threshold_percent:
-            logger.info(f'{avg_position["symbol"]}: {self.name} triggered SELL signal, expected profit: ${profit}')
+            logger.debug(f'{avg_position["symbol"]}: {self.name} triggered SELL signal, expected profit: ${profit}')
             return TradeAction.SELL
         
         return TradeAction.HOLD
