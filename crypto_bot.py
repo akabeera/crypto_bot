@@ -34,8 +34,13 @@ class CryptoBot:
         self.currency: str = self.config["currency"]
         self.sleep_interval = self.config["sleep_interval"]
         self.inter_currency_sleep_interval = self.config["inter_currency_sleep_interval"]
+
         self.crypto_whitelist = self.config["support_currencies"]
-        self.crypto_blacklist = self.config["blacklisted_currencies"]
+        self.crypto_blacklist = []
+        if "blacklisted_currencies" in self.config:
+            self.crypto_blacklist = self.config["blacklisted_currencies"]
+
+        self.supported_crypto_list = list(set(self.crypto_whitelist).difference(self.crypto_blacklist))
 
         mongodb_config = self.config["mongodb"] 
         self.mongodb_db_name = mongodb_config["db_name"]
@@ -53,9 +58,17 @@ class CryptoBot:
 
         self.strategies = {}
         self.strategies_priorities = []
+        self.strategies_overrides = {}
         
         for strategy_json in strategies_json:
             strategy_priority = strategy_json["priority"]
+            strategy_enabled = True
+            if "enabled" in strategy_json:
+                strategy_enabled = strategy_json["enabled"]
+
+            if not strategy_enabled:
+                continue
+
             strategy_object = strategy_factory(strategy_json)
 
             if strategy_object is None:
@@ -69,13 +82,31 @@ class CryptoBot:
 
             if strategy_priority not in self.strategies_priorities:
                 self.strategies_priorities.append(strategy_priority)
+        
+        #overrides does NOT override priorities of the base strategy
+        if "strategies_overrides" in self.config:
+            sos = self.config["strategies_overrides"]
+            for so in sos:
+                tickers = so["tickers"]
+
+                for ticker in tickers:
+                    if ticker not in self.strategies_overrides:
+                            self.strategies_overrides[ticker] = {}
+                    
+                    for s in so["strategies"]:
+                        strat_name = s["name"]
+                        strat_object =  strategy_factory(s)
+                        # if strat_name not in strategies_overrides[ticker]:
+                        #     strategies_overrides[ticker][strat_name] = {}
+                        self.strategies_overrides[ticker][strat_name] = strat_object
 
         self.strategies_priorities.sort()
             
 
     def run(self):
         idx = 0
-        N = len(self.crypto_whitelist)
+        N = len(self.supported_crypto_list)
+        logger.info(f"Running for following cryto currencies: ${self.supported_crypto_list}")
 
         while True:
 
@@ -84,7 +115,7 @@ class CryptoBot:
                 time.sleep(self.sleep_interval)
                 idx = 0
 
-            ticker:str = self.crypto_whitelist[N-idx-1]
+            ticker:str = self.supported_crypto_list[idx]
             idx += 1 
 
             ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())
@@ -93,10 +124,6 @@ class CryptoBot:
             }
             trades = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
             avg_position = calculate_avg_position(trades)       
-
-
-            if ticker in self.crypto_blacklist and avg_position is None:
-                continue     
 
             ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchOHLCV")
             if ohlcv == None or len(ohlcv) == 0:
@@ -119,11 +146,18 @@ class CryptoBot:
             bid_price = ticker_info['bid']
     
             for priority in self.strategies_priorities:
-                cuurrent_strategies = self.strategies[priority]
+                current_strategies = self.strategies[priority]
 
                 action = TradeAction.NOOP
-                for s_idx, strgy in enumerate(cuurrent_strategies):
-                    curr_action = strgy.eval(avg_position, candles_df, ticker_info)    
+                for s_idx, strgy in enumerate(current_strategies):
+                    curr_strat_name = strgy.name
+                    curr_action = TradeAction.NOOP
+                    if ticker_pair in self.strategies_overrides:
+                        if curr_strat_name in self.strategies_overrides[ticker_pair]:
+                            curr_action = self.strategies_overrides[ticker_pair][curr_strat_name].eval(avg_position, candles_df, ticker_info)
+                    else: 
+                        curr_action = strgy.eval(avg_position, candles_df, ticker_info)    
+
                     if s_idx == 0:
                         action = curr_action
                     else:
@@ -131,7 +165,7 @@ class CryptoBot:
                             action = TradeAction.NOOP
                             break
 
-                if action == TradeAction.BUY and ticker not in self.crypto_blacklist:
+                if action == TradeAction.BUY:
                     logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
                     break

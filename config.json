@@ -57,6 +57,21 @@
             "prevent_loss": true
         }
     ],
+    "strategies_overrides": [
+        {
+            "tickers":["ICP/USD"],
+            "strategies": [
+                {
+                    "name": "RSI",
+                    "priority": 2,
+                    "parameters": {
+                        "overbought_signal_threshold": 70,
+                        "oversold_signal_threshold": 30
+                    }
+                }
+            ]
+        }
+    ],
     "support_currencies": [
         "WCFG",
         "AVT",
