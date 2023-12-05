@@ -1,6 +1,6 @@
 {
-    "max_spend": 100,
-    "amount_per_transaction": 10,
+    "max_spend": 200,
+    "amount_per_transaction": 20,
     "reinvestment_percent": 0,
     "sleep_interval": 20,
     "currency": "USD",
@@ -48,7 +48,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 75,
-                "oversold_signal_threshold": 25
+                "oversold_signal_threshold": 20
             }
         },
         {
@@ -87,7 +87,10 @@
         "ASM",
         "MATIC",
         "DOT",
-        "AMP"
+        "AMP",
+        "SHIB",
+        "COMP",
+        "ATOM"
     ],
     "blacklisted_currencies": []
 }

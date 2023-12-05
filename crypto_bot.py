@@ -152,8 +152,7 @@ class CryptoBot:
                 for s_idx, strgy in enumerate(current_strategies):
                     curr_strat_name = strgy.name
                     curr_action = TradeAction.NOOP
-                    if ticker_pair in self.strategies_overrides:
-                        if curr_strat_name in self.strategies_overrides[ticker_pair]:
+                    if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
                             curr_action = self.strategies_overrides[ticker_pair][curr_strat_name].eval(avg_position, candles_df, ticker_info)
                     else: 
                         curr_action = strgy.eval(avg_position, candles_df, ticker_info)    
