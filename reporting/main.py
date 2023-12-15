@@ -97,9 +97,10 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
         profit_pct = calculate_profit_percent(avg_position, ticker_info) * 100
         price = ticker_info["bid"]
         shares = avg_position["amount"]
+        avg_price = avg_position["price"]
         market_value = price * shares
         total_market_value += market_value
-        print("{:10s} {:20.9f} ${:20.15f} {:7.4f}% {:4d}".format(symbol, shares, market_value, profit_pct, len(trades)))
+        print("{:10s} {:20.9f} ${:20.15f} {:10.6f}% ${:20.15f} {:4d}".format(symbol, shares, avg_price, profit_pct, market_value, len(trades)))
         
     print(f"\nTotal Market Value: {total_market_value}")
 

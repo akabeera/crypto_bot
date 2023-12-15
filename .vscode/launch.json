@@ -19,6 +19,16 @@
             "module": "reporting.main",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Admin Module",
+            "type": "python",
+            "request": "launch",
+            "module": "admin.main",
+            "console": "integratedTerminal",
+            
+            "args": ["--ticker=FIL/USD", "--op=add_order", "--orders=cb9471a5-ec1a-47f2-ad30-ebad01af8502,39d17333-4c28-49d2-a778-3b61551009ef,1740c60a-d3b5-43e1-89af-46d5c637a3fe,b8956ea8-339d-4bc3-a00e-097833977122,acc1a740-3df3-499a-9c84-895eeb45ccbe,d586dbef-32a7-494d-a758-3e9b8902a5be,54cc607c-fdf3-4a49-a137-614e1d3640a1,3d793521-7413-4c7a-9f25-9daebfb7ce7f,71e6eaca-69bc-463e-a5f8-d533a690e7ce,eb07a462-bc5f-4645-a368-a4babdc23b94"],
+            "justMyCode": true
         }
     ]
 }

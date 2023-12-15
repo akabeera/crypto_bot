@@ -1,8 +1,8 @@
 {
     "max_spend": 200,
-    "amount_per_transaction": 20,
-    "reinvestment_percent": 0,
-    "sleep_interval": 20,
+    "amount_per_transaction": 50,
+    "reinvestment_percent": 100,
+    "sleep_interval": 10,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
@@ -66,13 +66,27 @@
                     "priority": 2,
                     "parameters": {
                         "overbought_signal_threshold": 72,
-                        "oversold_signal_threshold": 30
+                        "oversold_signal_threshold": 20
+                    }
+                }
+            ]
+        },
+        {
+            "tickers":["COMP/USD", "WCFG/USD", "FIL/USD", "AMP/USD"],
+            "strategies": [
+                {
+                    "name": "RSI",
+                    "priority": 2,
+                    "parameters": {
+                        "overbought_signal_threshold": 72,
+                        "oversold_signal_threshold": 25
                     }
                 }
             ]
         }
     ],
     "support_currencies": [
+        "LPT",
         "WCFG",
         "BNT",
         "ATOM",
