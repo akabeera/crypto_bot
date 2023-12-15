@@ -100,9 +100,6 @@ class ExchangeService:
             return None
         
     def create_order(self, ticker_pair: str, shares: float, type: str, side: str, price: float = None):
-
-        print(f"ORDER: {price}")
-        
         order_results = self.exchange_client.create_order(ticker_pair, type, side, shares, price)
         order_id = order_results['info']['order_id']
 
