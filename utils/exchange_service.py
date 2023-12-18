@@ -61,6 +61,8 @@ class ExchangeService:
             elif op == "fetchOrder":
                 order = self.exchange_client.fetch_order(order_id)
                 return order
+            elif op == "fetchOrders":
+                return self.exchange_client.fetch_orders(ticker_pair, 1690891200, 1000)
             elif op == "createOrder":                
                 market_order_type = self.market_order_type_buy if order_type == "buy" else self.market_order_type_sell
 
@@ -76,6 +78,8 @@ class ExchangeService:
             elif op == "cancelOrder":
                  self.exchange_client.cancel_order(order_id, ticker_pair)
                  return None
+            elif op == "fetchMyTrades":
+                return self.exchange_client.fetch_my_trades(ticker_pair, 1690891200, 1000)
             else:
                 logger.error(f"{ticker_pair}: unsupported exchange operation: {op}")
                 return None

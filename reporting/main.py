@@ -93,6 +93,9 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
             print("{:15s} {:35s} {:4s}".format(symbol, "--", "--"))
             continue
 
+        if ticker_info["bid"] is None:
+            continue
+
         avg_position = calculate_avg_position(trades)
         profit_pct = calculate_profit_percent(avg_position, ticker_info) * 100
         price = ticker_info["bid"]
