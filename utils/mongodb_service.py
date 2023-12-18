@@ -69,12 +69,12 @@ class MongoDBService:
             # Handle any other PyMongo errors
             print(f"An error occurred while querying: {e}")
 
-    def update_one(self, collection, document, filter_dict, upsert = False):
+    def replace_one(self, collection, document, filter_dict, upsert = False):
         try:
             if self.db is None:
                 raise OperationFailure("Database not accessible")
             coll = self.db[collection]
-            return coll.update_one(filter_dict, document, upsert)
+            return coll.replace_one(filter_dict, document, upsert)
 
         except OperationFailure as e:
             # Handle failed operation details
@@ -113,7 +113,7 @@ class MongoDBService:
                 for sell_order in sell_order_insertions:
                     id = sell_order["sell_order"]["id"]
                     query_filter = {
-                        'id': id
+                        "sell_order.id": id
                     }
 
                     curr_sell_order = self.query(reconcilation_actions.sell_order_collection, query_filter)
@@ -140,7 +140,7 @@ class MongoDBService:
                     update_filter = {
                         'id': buy_order['id']
                     }
-                    self.update_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)                  
+                    self.replace_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)                  
 
         except PyMongoError as e:
             print(f"An error occurred in deleteMany: {e}")
