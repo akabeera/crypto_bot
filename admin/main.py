@@ -62,7 +62,7 @@ def get_orders(orders: str, ticker_pair: str):
         pprint.pprint(order)
 
 
-def reconcile(ticker_pair: str):
+def reconcile(ticker_pair: str, dry_run: bool):
     filter = {
         'sell_order.symbol': ticker_pair
     }
@@ -92,7 +92,10 @@ def reconcile(ticker_pair: str):
         reconcilation_actions.sell_order_collection = SELL_ORDERS_COLLECTION
         reconcilation_actions.buy_order_collection = TRADES_COLLECTION
 
-        mongodb_service.reconciliation(reconcilation_actions)
+        if dry_run:
+            pprint.pprint(reconcilation_actions, depth=10)
+        else:
+            mongodb_service.reconciliation(reconcilation_actions)
         buy_orders.clear()
 
 
@@ -102,6 +105,9 @@ if __name__ == "__main__":
     parser.add_argument("--op", help="the operation you want to perform")
     parser.add_argument("--orders", help="comma separated list of order numbers")
     parser.add_argument("--ticker_pair", help="ticker pair")
+    parser.add_argument("--dry_run", help="dry run", default=True, type=bool)
+
+
 
     args = parser.parse_args()
 
@@ -111,7 +117,7 @@ if __name__ == "__main__":
         if args.op == "get_orders":
             get_orders(args.orders, args.ticker_pair)
         if args.op == "recon":
-            reconcile(args.ticker_pair)
+            reconcile(args.ticker_pair, args.dry_run)
     else:
         print("no op argument")
 

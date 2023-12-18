@@ -1,4 +1,5 @@
 import copy
+import pprint
 from decimal import *
 from utils.constants import ZERO, ONE, ONE_HUNDRED
 
@@ -11,7 +12,24 @@ class ReconciliationActions:
         self.buy_order_updates = [] 
 
         self.sell_order_collection = ""
-        self.buy_order_collection = ""   
+        self.buy_order_collection = ""  
+
+    def __repr__(self) -> str:
+
+        sell_order_ids_to_insert = []
+        for order in self.sell_order_insertions:
+            sell_order_ids_to_insert.append(order["sell_order"]["id"])
+
+
+        buy_order_ids_to_delete = []
+        for order in self.buy_order_deletions:
+            buy_order_ids_to_delete.append(order["id"])
+        
+        return f""" 
+sell_order_insertions: {sell_order_ids_to_insert},
+buy_order_deletions: {buy_order_ids_to_delete},
+buy_order_updates: {pprint.pformat(self.buy_order_updates[0])}
+""" 
 
 def split_order(order, remaining):
     amount = Decimal(order["amount"])
