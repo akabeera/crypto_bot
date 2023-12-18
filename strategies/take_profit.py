@@ -1,7 +1,7 @@
 from decimal import *
 
 from .base_strategy import BaseStrategy
-from strategies.utils import calculate_profit_percent
+from utils.trading import calculate_profit_percent
 from utils.logger import logger
 from utils.trading import TradeAction
 

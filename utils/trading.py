@@ -19,7 +19,6 @@ def calculate_profit_percent(avg_position, ticker_info) -> Decimal:
     fee = Decimal(avg_position["fee"]["cost"])
     cost = Decimal(avg_position["cost"])
 
-
     profit = (bid - price) * shares 
     profit_after_fees = profit - (fee * FEE_MULTIPLIER)
     profit_after_fees_pct = profit_after_fees/cost

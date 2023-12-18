@@ -1,7 +1,7 @@
 
 import unittest
 from decimal import *
-from strategies.utils import calculate_profit_percent, calculate_avg_position
+from utils.trading import calculate_profit_percent, calculate_avg_position
 from tests.fixtures.single_trade import ATOM_TRADE
 from tests.fixtures.multiple_trades import SOL_TRADES
 from tests.fixtures.ticker_info import ATOM_TICKER_INFO

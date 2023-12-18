@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure, PyMongoError
+from utils.reconciliation import ReconciliationActions
 import urllib.parse
 
 class MongoDBService:
@@ -68,6 +69,20 @@ class MongoDBService:
             # Handle any other PyMongo errors
             print(f"An error occurred while querying: {e}")
 
+    def update_one(self, collection, document, filter_dict, upsert = False):
+        try:
+            if self.db is None:
+                raise OperationFailure("Database not accessible")
+            coll = self.db[collection]
+            return coll.update_one(filter_dict, document, upsert)
+
+        except OperationFailure as e:
+            # Handle failed operation details
+            print(f"Operation failed in update_one: {e}")
+        except PyMongoError as e:
+            # Handle any other PyMongo errors
+            print(f"An error occurred in update_one: {e}")
+
 
     def delete_many(self, collection, filter_dict=None):
         if filter_dict is None:
@@ -78,14 +93,58 @@ class MongoDBService:
                 raise OperationFailure("Database not accessible")
             
             coll = self.db[collection]
-            coll.delete_many(filter_dict)
+            return coll.delete_many(filter_dict)
 
         except OperationFailure as e:
             # Handle failed operation details
             print(f"Operation failed: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred while querying: {e}")
+            print(f"An error occurred in deleteMany: {e}")
+
+
+    def reconciliation(self, reconcilation_actions:ReconciliationActions):
+        try:
+            if reconcilation_actions is None:
+                return
+
+            sell_order_insertions = reconcilation_actions.sell_order_insertions
+            if len(sell_order_insertions) > 0:
+                for sell_order in sell_order_insertions:
+                    id = sell_order["sell_order"]["id"]
+                    query_filter = {
+                        'id': id
+                    }
+
+                    curr_sell_order = self.query(reconcilation_actions.sell_order_collection, query_filter)
+                    if len(curr_sell_order) > 0:
+                        print(f"WARNING: sell order already exists {id}, skipping")
+                        continue
+
+                    self.insert_one(reconcilation_actions.sell_order_collection, sell_order)
+
+            buy_order_deletions = reconcilation_actions.buy_order_deletions
+            if len(buy_order_deletions) > 0:
+                to_delete_list = []
+                for buy_order in buy_order_deletions:
+                    to_delete_list.append(buy_order["id"])
+
+                delete_filter = {
+                    'id': {"$in": to_delete_list}
+                }
+                delete_many_result = self.delete_many(reconcilation_actions.buy_order_collection, delete_filter)
+
+            buy_order_updates = reconcilation_actions.buy_order_updates
+            if len(buy_order_updates) > 0:
+                for buy_order in buy_order_updates:
+                    update_filter = {
+                        'id': buy_order['id']
+                    }
+                    self.update_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)                  
+
+        except PyMongoError as e:
+            print(f"An error occurred in deleteMany: {e}")
+
 
     @classmethod
     def close_connection(cls):
