@@ -58,7 +58,7 @@ class MongoDBService:
                 raise OperationFailure("Database not accessible")
             
             coll = self.db[collection]
-            coll.insert_one(document)
+            return coll.insert_one(document)
 
         except OperationFailure as e:
             # Handle failed operation details

@@ -81,6 +81,7 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
     total = Decimal(0)
     for idx, order in enumerate(exchange_orders):
         side = order['side']
+        id = order["id"]
 
         if side == "buy":
             buy_orders_count += 1
@@ -100,6 +101,16 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
             total -= Decimal(order["filled"])
 
             if completion_pct == ONE_HUNDRED:
+                db_sell_order = mongodb_service.query(SELL_ORDERS_COLLECTION, {"sell_order.id": id})
+                if len(db_sell_order) > 0:
+                    closed_positions = db_sell_order[0]["closed_positions"]
+                    ids_in_db = {pos["id"] for pos in closed_positions}
+                    if len(closed_positions) != len(buy_orders):
+                        print(f"WARNING: sell order {id} missing positions")
+                        missing_buy_orders = [bo for bo in buy_orders if bo["id"] not in ids_in_db]
+                        print (f"WARNING: num of missing buy orders: {len(missing_buy_orders)}")
+                        reconciliation_actions.buy_order_insertions.extend(missing_buy_orders)
+
                 buy_orders.clear()
                 continue
 
@@ -115,11 +126,11 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
             reconciliation_actions.buy_order_insertions.extend(buy_orders)
 
     print (f"{ticker_pair} had {buy_orders_count} buys & {sell_orders_count} sells and final tally of {total} shares")
-
+    pprint.pprint(reconciliation_actions, depth=10)
     if dry_run:
-        pprint.pprint(reconciliation_actions, depth=10)
-    else:
-        reconcile(reconciliation_actions, mongodb_service)
+        return
+    
+    reconcile(reconciliation_actions, mongodb_service)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,8 @@ import json
 import time
 from dotenv import load_dotenv
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
-
 from utils.logger import logger
+from utils.constants import AUG_FIRST_TIMESTAMP_MS
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
@@ -62,7 +62,7 @@ class ExchangeService:
                 order = self.exchange_client.fetch_order(order_id)
                 return order
             elif op == "fetchOrders":
-                return self.exchange_client.fetch_orders(ticker_pair, 1690891200, 1000)
+                return self.exchange_client.fetch_orders(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 500)
             elif op == "createOrder":                
                 market_order_type = self.market_order_type_buy if order_type == "buy" else self.market_order_type_sell
 
