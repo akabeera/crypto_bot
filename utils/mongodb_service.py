@@ -1,7 +1,5 @@
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure, PyMongoError
-from utils.reconciliation import ReconciliationActions
-import urllib.parse
 
 class MongoDBService:
     _client = None
@@ -101,50 +99,6 @@ class MongoDBService:
         except PyMongoError as e:
             # Handle any other PyMongo errors
             print(f"An error occurred in deleteMany: {e}")
-
-
-    def reconciliation(self, reconcilation_actions:ReconciliationActions):
-        try:
-            if reconcilation_actions is None:
-                return
-
-            sell_order_insertions = reconcilation_actions.sell_order_insertions
-            if len(sell_order_insertions) > 0:
-                for sell_order in sell_order_insertions:
-                    id = sell_order["sell_order"]["id"]
-                    query_filter = {
-                        "sell_order.id": id
-                    }
-
-                    curr_sell_order = self.query(reconcilation_actions.sell_order_collection, query_filter)
-                    if len(curr_sell_order) > 0:
-                        print(f"WARNING: sell order already exists {id}, skipping")
-                        continue
-
-                    self.insert_one(reconcilation_actions.sell_order_collection, sell_order)
-
-            buy_order_deletions = reconcilation_actions.buy_order_deletions
-            if len(buy_order_deletions) > 0:
-                to_delete_list = []
-                for buy_order in buy_order_deletions:
-                    to_delete_list.append(buy_order["id"])
-
-                delete_filter = {
-                    'id': {"$in": to_delete_list}
-                }
-                delete_many_result = self.delete_many(reconcilation_actions.buy_order_collection, delete_filter)
-
-            buy_order_updates = reconcilation_actions.buy_order_updates
-            if len(buy_order_updates) > 0:
-                for buy_order in buy_order_updates:
-                    update_filter = {
-                        'id': buy_order['id']
-                    }
-                    self.replace_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)                  
-
-        except PyMongoError as e:
-            print(f"An error occurred in deleteMany: {e}")
-
 
     @classmethod
     def close_connection(cls):
