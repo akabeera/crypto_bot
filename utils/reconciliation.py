@@ -121,7 +121,8 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
                 print(f"WARNING: sell order already exists {id}, skipping")
                 continue
 
-            mongodb_service.insert_one(reconcilation_actions.sell_order_collection, sell_order)
+            sell_insert_result = mongodb_service.insert_one(reconcilation_actions.sell_order_collection, sell_order)
+            print(f"sell insertion result: {sell_insert_result}")
 
         buy_order_deletions = reconcilation_actions.buy_order_deletions
         if len(buy_order_deletions) > 0:
@@ -133,13 +134,15 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
                 'id': {"$in": to_delete_list}
             }
             delete_many_result = mongodb_service.delete_many(reconcilation_actions.buy_order_collection, delete_filter)
+            print(f"buy deletion result: {delete_many_result}")
 
         buy_order_updates = reconcilation_actions.buy_order_updates
         for buy_order in buy_order_updates:
             update_filter = {
                 'id': buy_order['id']
             }
-            mongodb_service.replace_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)  
+            update_result = mongodb_service.replace_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)  
+            print(f"buy update result: {update_result}")
 
         buy_order_insertions = reconcilation_actions.buy_order_insertions
         for buy_order in buy_order_insertions:
@@ -151,7 +154,8 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
             if len(curr_buy_order) > 0:
                 print(f"WARNING: buy order already exists {id}, skipping insert")
                 continue
-            mongodb_service.insert_one(reconcilation_actions.buy_order_collection, buy_order)
+            buy_insert_result = mongodb_service.insert_one(reconcilation_actions.buy_order_collection, buy_order)
+            print(f"buy insertion result: {buy_insert_result}")
 
     except PyMongoError as e:
         print(f"An error occurred in deleteMany: {e}")

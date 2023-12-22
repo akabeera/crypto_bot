@@ -86,14 +86,14 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
         if side == "buy":
             buy_orders_count += 1
             if order["filled"] != order["amount"]:
-                print(f"WARNING: buy order {order["id"]} was partially filled")
+                print(f"WARNING: buy order {order['id']} was partially filled")
             buy_orders.append(order)
             total += Decimal(order["filled"])
         else:
             sell_orders_count += 1
             order_info = order["info"]
             completion_pct = Decimal(order_info["completion_percentage"])
-            print(f"{ticker_pair} evaluating sell order:{order["id"]}, date: {order["datetime"]}, completion percent: {completion_pct}")
+            print(f"{ticker_pair} evaluating sell order:{order['id']}, date: {order['datetime']}, completion percent: {completion_pct}")
 
             if completion_pct == ZERO:
                 continue
@@ -121,12 +121,25 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
             reconciliation_actions.sell_order_insertions.extend(actions.sell_order_insertions)
             reconciliation_actions.buy_order_deletions.extend(actions.buy_order_deletions)
             reconciliation_actions.buy_order_updates.extend(actions.buy_order_updates)
+            reconciliation_actions.buy_order_insertions.extend(actions.buy_order_insertions)
+
 
         if idx == len(exchange_orders) - 1:
             reconciliation_actions.buy_order_insertions.extend(buy_orders)
 
     print (f"{ticker_pair} had {buy_orders_count} buys & {sell_orders_count} sells and final tally of {total} shares")
     pprint.pprint(reconciliation_actions, depth=10)
+
+    #calculate current position based on the recon actions
+    
+    recon_total = 0
+    for buy_inserts in reconciliation_actions.buy_order_insertions:
+        recon_total += buy_inserts["filled"]
+    for buy_updates in reconciliation_actions.buy_order_updates:
+        recon_total += buy_updates["filled"]
+    print(f"{ticker_pair} tally of recon actions, {recon_total} shares")
+    
+
     if dry_run:
         return
     
