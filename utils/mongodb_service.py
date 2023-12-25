@@ -1,8 +1,11 @@
+import datetime
+import uuid
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure, PyMongoError
 
 class MongoDBService:
     _client = None
+    _backup_collection = "snapshots"
 
     @classmethod
     def _get_client(cls, db_url):
@@ -47,10 +50,10 @@ class MongoDBService:
 
         except OperationFailure as e:
             # Handle failed operation details
-            print(f"Operation failed: {e}")
+            print(f"Operation failed in query: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred while querying: {e}")
+            print(f"An error occurred while query: {e}")
 
     def insert_one(self, collection, document):
         try:
@@ -62,10 +65,10 @@ class MongoDBService:
 
         except OperationFailure as e:
             # Handle failed operation details
-            print(f"Operation failed: {e}")
+            print(f"Operation failed in insert_one: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred while querying: {e}")
+            print(f"An error occurred while insert_one: {e}")
 
     def replace_one(self, collection, document, filter_dict, upsert = False):
         try:
@@ -76,10 +79,10 @@ class MongoDBService:
 
         except OperationFailure as e:
             # Handle failed operation details
-            print(f"Operation failed in update_one: {e}")
+            print(f"Operation failed in replace_one: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred in update_one: {e}")
+            print(f"An error occurred in replace_one: {e}")
 
 
     def delete_many(self, collection, filter_dict=None):
@@ -98,7 +101,37 @@ class MongoDBService:
             print(f"Operation failed: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred in deleteMany: {e}")
+            print(f"An error occurred in delete_many: {e}")
+    
+    def snapshot(self, snapshot_collection, collections_to_backup, description = "", start_time = None):
+        try:
+            collections = {}
+            for col in collections_to_backup:
+                documents = self.query(col)
+                collections[col] = documents
+
+            now = datetime.datetime.now()
+            timestamp = now.timestamp()
+            snapshot = {
+                "id": str(uuid.uuid4()),
+                "timestamp": timestamp,
+                "since": start_time,
+                "description": description,
+                "collections": collections 
+            }
+
+            return self.insert_one(snapshot_collection, snapshot)
+            
+        except OperationFailure as e:
+            # Handle failed operation details
+            print(f"Operation failed during snapshot: {e}")
+            return None
+        except PyMongoError as e:
+            # Handle any other PyMongo errors
+            print(f"An error occurred in snapshot: {e}")
+            return None
+
+
 
     @classmethod
     def close_connection(cls):

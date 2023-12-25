@@ -35,7 +35,7 @@
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",     
-            "args": ["--ticker=IOTX/USD", "--op=recon", "--dry_run=True"],
+            "args": ["--ticker=IOTX/USD", "--op=recon", "--dry_run=False"],
        
             "justMyCode": true
         },

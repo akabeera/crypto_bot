@@ -1,7 +1,8 @@
 import copy
+import pprint
 from decimal import *
 from pymongo.errors import PyMongoError
-from utils.constants import ZERO, ONE, ONE_HUNDRED
+from utils.constants import DEFAULT_MONGO_SNAPSHOTS_COLLECTION, ZERO, ONE, ONE_HUNDRED
 from utils.mongodb_service import MongoDBService
 
 class ReconciliationActions:
@@ -12,7 +13,6 @@ class ReconciliationActions:
         self.buy_order_insertions = []
         self.buy_order_updates = [] 
         self.buy_order_deletions = []
-
 
         self.sell_order_collection = ""
         self.buy_order_collection = ""  
@@ -119,6 +119,18 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
     try:
         if reconcilation_actions is None:
             return
+        
+        buy_order_collection = reconcilation_actions.buy_order_collection
+        sell_order_collection = reconcilation_actions.sell_order_collection
+        
+        collections_to_backup = [
+            buy_order_collection,
+            sell_order_collection
+        ]
+        snapshot = mongodb_service.snapshot(DEFAULT_MONGO_SNAPSHOTS_COLLECTION, collections_to_backup, "backup before IOTX reconciliation")
+        if snapshot is None:
+            print("An error occurred while backing up, aborting reconciliation")
+            return
 
         sell_order_insertions = reconcilation_actions.sell_order_insertions
         for sell_order in sell_order_insertions:
@@ -126,14 +138,16 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
             query_filter = {
                 "sell_order.id": id
             }
+            print(f"inserting sell order {id}")
 
-            curr_sell_order = mongodb_service.query(reconcilation_actions.sell_order_collection, query_filter)
+            curr_sell_order = mongodb_service.query(sell_order_collection, query_filter)
             if len(curr_sell_order) > 0:
-                print(f"WARNING: sell order already exists {id}, skipping")
-                continue
-
-            sell_insert_result = mongodb_service.insert_one(reconcilation_actions.sell_order_collection, sell_order)
-            print(f"sell insertion result: {sell_insert_result}")
+                print(f"WARNING: sell order already exists {id}, replacing")
+                sell_replace_result = mongodb_service.replace_one(sell_order_collection, sell_order, query_filter, True)
+                print(f"sell order replace result: {sell_replace_result.raw_result}")
+            else:
+                sell_insert_result = mongodb_service.insert_one(sell_order_collection, sell_order)
+                print(f"sell insertion result: {sell_insert_result.inserted_id}")
 
         buy_order_deletions = reconcilation_actions.buy_order_deletions
         if len(buy_order_deletions) > 0:
@@ -144,16 +158,17 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
             delete_filter = {
                 'id': {"$in": to_delete_list}
             }
-            delete_many_result = mongodb_service.delete_many(reconcilation_actions.buy_order_collection, delete_filter)
-            print(f"buy deletion result: {delete_many_result}")
+            print(f"deleting buy order: {to_delete_list}")
+            delete_many_result = mongodb_service.delete_many(buy_order_collection, delete_filter)
+            print(f"buy deletion result: {delete_many_result.raw_result}")
 
         buy_order_updates = reconcilation_actions.buy_order_updates
         for buy_order in buy_order_updates:
             update_filter = {
                 'id': buy_order['id']
             }
-            update_result = mongodb_service.replace_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)  
-            print(f"buy update result: {update_result}")
+            update_result = mongodb_service.replace_one(buy_order_collection, buy_order, update_filter, True)  
+            print(f"buy update result: {update_result.raw_result}")
 
         buy_order_insertions = reconcilation_actions.buy_order_insertions
         for buy_order in buy_order_insertions:
@@ -161,12 +176,15 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
             query_filter = {
                 "id": id
             }
-            curr_buy_order = mongodb_service.query(reconcilation_actions.buy_order_collection, query_filter)
+            curr_buy_order = mongodb_service.query(buy_order_collection, query_filter)
             if len(curr_buy_order) > 0:
-                print(f"WARNING: buy order already exists {id}, skipping insert")
-                continue
-            buy_insert_result = mongodb_service.insert_one(reconcilation_actions.buy_order_collection, buy_order)
-            print(f"buy insertion result: {buy_insert_result}")
+                print(f"WARNING: buy order already exists {id}, replacing")
+                buy_replace_result = mongodb_service.replace_one(buy_order_collection, buy_order, query_filter, True)
+                print(f"buy order replace result: {buy_replace_result.raw_result}")
+
+            else:
+                buy_insert_result = mongodb_service.insert_one(buy_order_collection, buy_order)
+                print(f"buy insertion result: {buy_insert_result.inserted_id}")
 
     except PyMongoError as e:
         print(f"An error occurred in deleteMany: {e}")
