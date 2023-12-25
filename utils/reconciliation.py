@@ -1,5 +1,4 @@
 import copy
-import pprint
 from decimal import *
 from pymongo.errors import PyMongoError
 from utils.constants import ZERO, ONE, ONE_HUNDRED
@@ -70,11 +69,14 @@ def split_order(order, remaining):
 
     return (sell_order, updated_buy_order)
 
-def handle_partial_order(sell_order, buy_orders) -> ReconciliationActions:
+def handle_partial_order(sell_order, buy_orders, buy_orders_blacklist = set()) -> ReconciliationActions:
     sell_order_info = sell_order["info"]
     completion_pct = Decimal(sell_order_info["completion_percentage"])
 
-    if completion_pct == ZERO or completion_pct == ONE_HUNDRED:
+    # if completion_pct == ZERO or completion_pct == ONE_HUNDRED:
+    #     return None
+
+    if completion_pct == ZERO:
         return None
     
     actions = ReconciliationActions()
@@ -87,21 +89,30 @@ def handle_partial_order(sell_order, buy_orders) -> ReconciliationActions:
     )
     filled = Decimal(sell_order["filled"])
     remaining = filled
+    error_tolerance = Decimal(1)
 
-    for idx, buy_order in enumerate(buy_orders):
-        buy_amount = Decimal(buy_order["filled"])     
-        if remaining < buy_amount:
+    for buy_order in buy_orders:
+        id = buy_order["id"]
+        if id in buy_orders_blacklist:
+            #print(f"WARNING: buy order {id} blacklisted, skipping")
+            continue
+
+        buy_amount = Decimal(buy_order["filled"])
+        if  remaining < buy_amount:
             (split_sell_order, split_buy_order) = split_order(buy_order, remaining)
             actions.sell_order_insertions[0]["closed_positions"].append(split_sell_order)
+            print(f"splitting buy order {id} of {buy_amount} shares into sell: {split_sell_order['filled']}, buy: {split_buy_order['filled']}")
             actions.buy_order_updates.append(split_buy_order)
-            if idx+1 < len(buy_orders):
-                actions.buy_order_insertions.extend(buy_orders[idx+1:])
+            actions.buy_order_deletions.append(buy_order)
+
+            # if idx+1 < len(buy_orders):
+            #     actions.buy_order_insertions.extend(buy_orders[idx+1:])
             break
 
         remaining -= buy_amount
         actions.sell_order_insertions[0]["closed_positions"].append(buy_order)
         actions.buy_order_deletions.append(buy_order)
-        
+
     return actions
 
 def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: MongoDBService):

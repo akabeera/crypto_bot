@@ -2,7 +2,7 @@ import os
 import argparse
 import pprint
 from decimal import *
-
+from operator import itemgetter
 
 from dotenv import load_dotenv
 from utils.exchange_service import ExchangeService
@@ -61,16 +61,30 @@ def get_orders(orders: str, ticker_pair: str):
 
         pprint.pprint(order)
 
+def db_sell_order_reconciliation(sell_order, amount) -> Decimal:
+    total = 0
+    closed_positions = sell_order["closed_positions"]
+
+    for cp in closed_positions:
+        total += Decimal(cp["filled"])
+
+    return total - amount
+
 
 def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
+
+    #transactions = exchange_service.execute_op(ticker_pair, "fetchMyTrades")
+
     exchange_orders = exchange_service.execute_op(ticker_pair, "fetchOrders")
     if exchange_orders is None:
         print("ERROR: Failed to fetch orders from exchange, aborting")
         return
     
-    print(f"{ticker_pair} has {len(exchange_orders)} orders")
+    order_cache = {}
+    for order in exchange_orders:
+        order_cache[order["id"]] = order
     
-    buy_orders = []
+    print(f"{ticker_pair} has {len(exchange_orders)} orders")
     reconciliation_actions = ReconciliationActions()
     reconciliation_actions.sell_order_collection = SELL_ORDERS_COLLECTION
     reconciliation_actions.buy_order_collection = TRADES_COLLECTION
@@ -79,43 +93,76 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
     buy_orders_count = 0
 
     total = Decimal(0)
+
+    buy_orders = []
     for idx, order in enumerate(exchange_orders):
+
         side = order['side']
         id = order["id"]
+        filled = Decimal(order["filled"])
+        amount = Decimal(order["amount"])
 
         if side == "buy":
             buy_orders_count += 1
-            if order["filled"] != order["amount"]:
-                print(f"WARNING: buy order {order['id']} was partially filled")
+            if filled != amount:
+                print(f"WARNING: buy order {id} was partially filled")
             buy_orders.append(order)
-            total += Decimal(order["filled"])
+            total += filled
         else:
             sell_orders_count += 1
             order_info = order["info"]
             completion_pct = Decimal(order_info["completion_percentage"])
-            print(f"{ticker_pair} evaluating sell order:{order['id']}, date: {order['datetime']}, completion percent: {completion_pct}")
+            total -= filled
+            print(f"{ticker_pair} evaluating sell order:{id}, date: {order['datetime']}, completion percent: {completion_pct}, running total: {total}")
 
             if completion_pct == ZERO:
                 continue
 
-            total -= Decimal(order["filled"])
+            # db_sell_order = mongodb_service.query(SELL_ORDERS_COLLECTION, {"sell_order.id": id})
+            # if len(db_sell_order) > 0:
+            #     if completion_pct < ONE_HUNDRED:
+            #         print(f"{ticker_pair} WARNING: partial sell_order already in DB, aborting")
+            #         break
 
-            if completion_pct == ONE_HUNDRED:
-                db_sell_order = mongodb_service.query(SELL_ORDERS_COLLECTION, {"sell_order.id": id})
-                if len(db_sell_order) > 0:
-                    closed_positions = db_sell_order[0]["closed_positions"]
-                    ids_in_db = {pos["id"] for pos in closed_positions}
-                    if len(closed_positions) != len(buy_orders):
-                        print(f"WARNING: sell order {id} missing positions")
-                        missing_buy_orders = [bo for bo in buy_orders if bo["id"] not in ids_in_db]
-                        print (f"WARNING: num of missing buy orders: {len(missing_buy_orders)}")
-                        reconciliation_actions.buy_order_insertions.extend(missing_buy_orders)
+            #     db_sell_order_diff = db_sell_order_reconciliation(db_sell_order[0], filled)
+            #     #print(f"{ticker_pair} db sell order's closed positions diff: {db_sell_order_diff}")
+                
+            #     closed_positions = db_sell_order[0]["closed_positions"]
 
-                buy_orders.clear()
-                continue
+            #     for cp in closed_positions:
+            #         order_from_cb = order_cache[cp["id"]]
+            #         cp_filled = cp["filled"]
+            #         cb_filled = order_from_cb["filled"]
+            #         if cp_filled != cb_filled:
+            #             print(f"{ticker_pair} WARNING, order {cp['id']} from DB doesn't match up, filled from DB: {cp_filled}, filled from CB: {cb_filled}")
 
-            actions = handle_partial_order(order, buy_orders)
-            buy_orders.clear()
+            #     order_ids_to_remove = {pos["id"] for pos in closed_positions}
+            #     buy_orders = [bo for bo in buy_orders if bo["id"] not in order_ids_to_remove]
+            #     continue
+
+
+            buy_orders_blacklist = set()
+
+            # next_idx = idx+1
+            # while next_idx < len(exchange_orders):
+            #     next_order = exchange_orders[next_idx]
+            #     next_completion_pct = Decimal(next_order["info"]["completion_percentage"])
+            #     if next_completion_pct == ONE_HUNDRED:
+            #         next_db_sell_order = mongodb_service.query(SELL_ORDERS_COLLECTION, {"sell_order.id": next_order["id"]})
+            #         if len(next_db_sell_order) > 0:
+            #             next_closed_positions = next_db_sell_order[0]["closed_positions"]
+            #             buy_orders_blacklist = {np["id"] for np in next_closed_positions}
+            #             break
+            #     next_idx += 1
+
+            actions = handle_partial_order(order, buy_orders, buy_orders_blacklist)
+            buy_orders_total = ZERO
+            for db in actions.buy_order_deletions:
+                buy_orders_total += Decimal(db["filled"])
+            buy_order_update = ZERO
+            if len(actions.buy_order_updates) > 0:
+                buy_order_update = Decimal(actions.buy_order_updates[0]['filled'])
+            print(f"{ticker_pair} filled from CB order: {filled}, tally after handling partial sell order: {buy_orders_total - buy_order_update}")
 
             reconciliation_actions.sell_order_deletions.extend(actions.sell_order_deletions) 
             reconciliation_actions.sell_order_insertions.extend(actions.sell_order_insertions)
@@ -123,7 +170,13 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
             reconciliation_actions.buy_order_updates.extend(actions.buy_order_updates)
             reconciliation_actions.buy_order_insertions.extend(actions.buy_order_insertions)
 
+            ids_to_cleanup = {bod["id"] for bod in actions.buy_order_deletions}
+            buy_orders = [bo for bo in buy_orders if bo["id"] not in ids_to_cleanup]
+            if len(actions.buy_order_updates) > 0:
+                buy_orders.insert(0, actions.buy_order_updates[0])
 
+            reconciliation_actions.buy_order_updates = [bu for bu in reconciliation_actions.buy_order_updates if bu["id"] not in ids_to_cleanup]
+            
         if idx == len(exchange_orders) - 1:
             reconciliation_actions.buy_order_insertions.extend(buy_orders)
 
@@ -137,8 +190,8 @@ def reconcile_with_exchange(ticker_pair: str, dry_run: bool):
         recon_total += buy_inserts["filled"]
     for buy_updates in reconciliation_actions.buy_order_updates:
         recon_total += buy_updates["filled"]
+
     print(f"{ticker_pair} tally of recon actions, {recon_total} shares")
-    
 
     if dry_run:
         return

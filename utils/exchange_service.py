@@ -51,7 +51,7 @@ class ExchangeService:
     def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, total_cost = None, order_type:str = None, order_id: str = None):
         try:
             if not self.exchange_client.has[op]:
-                logger.warn(f"{ticker_pair}: exchange does not support op:{op}")
+                logger.warn(f"{ticker_pair}: exchange does not support op: {op}")
                 return None
                         
             if op == "fetchTicker":
@@ -79,7 +79,9 @@ class ExchangeService:
                  self.exchange_client.cancel_order(order_id, ticker_pair)
                  return None
             elif op == "fetchMyTrades":
-                return self.exchange_client.fetch_my_trades(ticker_pair, 1690891200, 1000)
+                return self.exchange_client.fetch_my_trades(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
+            elif op == "fetchTransactions":
+                return self.exchange_client.fetch_transactions(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
             else:
                 logger.error(f"{ticker_pair}: unsupported exchange operation: {op}")
                 return None
