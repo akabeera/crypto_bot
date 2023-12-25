@@ -69,18 +69,14 @@ def split_order(order, remaining):
 
     return (sell_order, updated_buy_order)
 
-def handle_partial_order(sell_order, buy_orders, buy_orders_blacklist = set()) -> ReconciliationActions:
+def reconcile_order(sell_order, buy_orders, buy_orders_blacklist = set()) -> ReconciliationActions:
     sell_order_info = sell_order["info"]
     completion_pct = Decimal(sell_order_info["completion_percentage"])
-
-    # if completion_pct == ZERO or completion_pct == ONE_HUNDRED:
-    #     return None
 
     if completion_pct == ZERO:
         return None
     
     actions = ReconciliationActions()
-
     actions.sell_order_insertions.append(
         {
             'sell_order': sell_order,
@@ -89,7 +85,6 @@ def handle_partial_order(sell_order, buy_orders, buy_orders_blacklist = set()) -
     )
     filled = Decimal(sell_order["filled"])
     remaining = filled
-    error_tolerance = Decimal(1)
 
     for buy_order in buy_orders:
         id = buy_order["id"]
@@ -104,9 +99,6 @@ def handle_partial_order(sell_order, buy_orders, buy_orders_blacklist = set()) -
             print(f"splitting buy order {id} of {buy_amount} shares into sell: {split_sell_order['filled']}, buy: {split_buy_order['filled']}")
             actions.buy_order_updates.append(split_buy_order)
             actions.buy_order_deletions.append(buy_order)
-
-            # if idx+1 < len(buy_orders):
-            #     actions.buy_order_insertions.extend(buy_orders[idx+1:])
             break
 
         remaining -= buy_amount
@@ -115,7 +107,7 @@ def handle_partial_order(sell_order, buy_orders, buy_orders_blacklist = set()) -
 
     return actions
 
-def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: MongoDBService):
+def apply_reconciliation_to_db(reconcilation_actions: ReconciliationActions, mongodb_service: MongoDBService):
     try:
         if reconcilation_actions is None:
             return
@@ -188,3 +180,78 @@ def reconcile(reconcilation_actions: ReconciliationActions, mongodb_service: Mon
 
     except PyMongoError as e:
         print(f"An error occurred in deleteMany: {e}")
+
+def reconcile_with_exchange(ticker_pair: str, exchange_orders) -> ReconciliationActions:
+    order_cache = {}
+    for order in exchange_orders:
+        order_cache[order["id"]] = order
+    
+    sell_orders_count = 0
+    buy_orders_count = 0
+
+    total = Decimal(0)
+    reconciliation_actions = ReconciliationActions()
+
+    buy_orders = []
+    for idx, order in enumerate(exchange_orders):
+        side = order['side']
+        id = order["id"]
+        filled = Decimal(order["filled"])
+        amount = Decimal(order["amount"])
+
+        if side == "buy":
+            buy_orders_count += 1
+            if filled != amount:
+                print(f"WARNING: buy order {id} was partially filled")
+            buy_orders.append(order)
+            total += filled
+        else:
+            sell_orders_count += 1
+            order_info = order["info"]
+            completion_pct = Decimal(order_info["completion_percentage"])
+            total -= filled
+            print(f"{ticker_pair} evaluating sell order:{id}, date: {order['datetime']}, completion percent: {completion_pct}")
+
+            if completion_pct == ZERO:
+                continue
+
+            buy_orders_blacklist = set()
+
+            actions = reconcile_order(order, buy_orders, buy_orders_blacklist)
+            buy_orders_total = ZERO
+            for db in actions.buy_order_deletions:
+                buy_orders_total += Decimal(db["filled"])
+            buy_order_update = ZERO
+            if len(actions.buy_order_updates) > 0:
+                buy_order_update = Decimal(actions.buy_order_updates[0]['filled'])
+            print(f"{ticker_pair} filled from CB order: {filled}, tally after reconcile order: {buy_orders_total - buy_order_update}")
+
+            reconciliation_actions.sell_order_deletions.extend(actions.sell_order_deletions) 
+            reconciliation_actions.sell_order_insertions.extend(actions.sell_order_insertions)
+            reconciliation_actions.buy_order_deletions.extend(actions.buy_order_deletions)
+            reconciliation_actions.buy_order_updates.extend(actions.buy_order_updates)
+            reconciliation_actions.buy_order_insertions.extend(actions.buy_order_insertions)
+
+            ids_to_cleanup = {bod["id"] for bod in actions.buy_order_deletions}
+            buy_orders = [bo for bo in buy_orders if bo["id"] not in ids_to_cleanup]
+            if len(actions.buy_order_updates) > 0:
+                buy_orders.insert(0, actions.buy_order_updates[0])
+
+            reconciliation_actions.buy_order_updates = [bu for bu in reconciliation_actions.buy_order_updates if bu["id"] not in ids_to_cleanup]
+            
+        if idx == len(exchange_orders) - 1:
+            reconciliation_actions.buy_order_insertions.extend(buy_orders)
+    
+    print(f"{ticker_pair} reconciliation actions")
+    pprint.pprint(actions, depth=10)
+    
+    #calculate current position based on the recon actions
+    recon_total = 0
+    for buy_inserts in reconciliation_actions.buy_order_insertions:
+        recon_total += buy_inserts["filled"]
+    for buy_updates in reconciliation_actions.buy_order_updates:
+        recon_total += buy_updates["filled"]
+
+    print(f"{ticker_pair} tally of recon actions, {recon_total} shares")
+    print(f"{ticker_pair} tally of replaying all orders {total} shares")
+    return reconciliation_actions
