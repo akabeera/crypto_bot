@@ -60,8 +60,14 @@ def get_orders(orders: str, ticker_pair: str):
         pprint.pprint(order)
 
 def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
+    
+    print(f"Starting recon process")
+    total_recon_value = Decimal(0)  
+    tickers_applied_recon = []
+
     for ticker_pair in ticker_pairs:
-        print(f"{ticker_pair} Starting recon process")
+        print("\n\n")
+        print(f"{ticker_pair}")
         exchange_orders = exchange_service.execute_op(ticker_pair, "fetchOrders")
         
         if exchange_orders is None:
@@ -84,18 +90,24 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
 
         bid_price = Decimal(ticker_info['bid'])
         recon_value = bid_price * actions.recon_actions_shares_tally
-        print(f"{ticker_pair} recovering value of {recon_value} after recon")
 
         if recon_value < FIVE:
             print(f"{ticker_pair} recon value is only {recon_value}, not worth applying to DB, skipping")
             continue        
-
+        
+        print(f"{ticker_pair} recovering value of {recon_value} after recon")
+        total_recon_value += recon_value
+        tickers_applied_recon.append(ticker_pair)
         if dry_run:
             print(f"{ticker_pair} dry_run flag enabled, skipping apply to DB")
             continue
         
         print(f"{ticker_pair} applying reconciliation actions to DB")
         apply_reconciliation_to_db(actions, mongodb_service)
+
+    print("\nrecon summary:")
+    print(f"{ticker_pair} tickers applied recon: {','.join(tickers_applied_recon)}")
+    print(f"{ticker_pair} total value of applied recon actions {total_recon_value}")
 
 
 if __name__ == "__main__":

@@ -39,8 +39,7 @@ class ReconciliationActions:
         for order in self.buy_order_deletions:
             buy_order_ids_to_delete.append(order["id"])
         
-        return f""" 
-sell_order_insertions: {sell_order_ids_to_insert},
+        return f""" sell_order_insertions: {sell_order_ids_to_insert},
 buy_order_insertions: {buy_order_ids_to_insert},
 buy_order_updates: {buy_order_ids_to_update},
 buy_order_deletions: {buy_order_ids_to_delete},
@@ -242,7 +241,7 @@ def reconcile_with_exchange(ticker_pair: str, exchange_orders) -> Reconciliation
             reconciliation_actions.buy_order_insertions.extend(buy_orders)
     
     print(f"{ticker_pair} reconciliation actions")
-    pprint.pprint(actions, depth=10)
+    print(actions)
     
     #calculate current position based on the recon actions
     for buy_inserts in reconciliation_actions.buy_order_insertions:
@@ -250,6 +249,5 @@ def reconcile_with_exchange(ticker_pair: str, exchange_orders) -> Reconciliation
     for buy_updates in reconciliation_actions.buy_order_updates:
         reconciliation_actions.recon_actions_shares_tally += Decimal(buy_updates["filled"])
 
-    print(f"{ticker_pair} tally of recon actions, {reconciliation_actions.recon_actions_shares_tally} shares")
-    print(f"{ticker_pair} tally of replaying all orders {reconciliation_actions.replay_orders_shares_tally} shares")
+    print(f"{ticker_pair} recon actions tally: {reconciliation_actions.recon_actions_shares_tally} shares, replaying orders tally: {reconciliation_actions.replay_orders_shares_tally} shares")
     return reconciliation_actions
