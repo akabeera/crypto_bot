@@ -5,6 +5,8 @@ from pymongo.errors import PyMongoError
 from utils.constants import DEFAULT_MONGO_SNAPSHOTS_COLLECTION, ZERO, ONE, ONE_HUNDRED
 from utils.mongodb_service import MongoDBService
 
+getcontext().prec = 50
+
 class ReconciliationActions:
 
     def __init__(self):
@@ -16,6 +18,8 @@ class ReconciliationActions:
 
         self.sell_order_collection = ""
         self.buy_order_collection = ""  
+        self.replay_orders_shares_tally = Decimal(0)
+        self.recon_actions_shares_tally = Decimal(0)
 
     def __repr__(self) -> str:
 
@@ -41,7 +45,9 @@ buy_order_insertions: {buy_order_ids_to_insert},
 buy_order_updates: {buy_order_ids_to_update},
 buy_order_deletions: {buy_order_ids_to_delete},
 """
-
+    def can_automatically_reconcile(self) -> bool:
+        precision = Decimal(1.0000000000000000)
+        return self.replay_orders_shares_tally.quantize(precision, rounding=ROUND_HALF_UP) == self.recon_actions_shares_tally.quantize(precision, rounding=ROUND_HALF_UP)
 
 def split_order(order, remaining):
     amount = Decimal(order["filled"])
@@ -185,13 +191,8 @@ def reconcile_with_exchange(ticker_pair: str, exchange_orders) -> Reconciliation
     order_cache = {}
     for order in exchange_orders:
         order_cache[order["id"]] = order
-    
-    sell_orders_count = 0
-    buy_orders_count = 0
 
-    total = Decimal(0)
     reconciliation_actions = ReconciliationActions()
-
     buy_orders = []
     for idx, order in enumerate(exchange_orders):
         side = order['side']
@@ -200,16 +201,14 @@ def reconcile_with_exchange(ticker_pair: str, exchange_orders) -> Reconciliation
         amount = Decimal(order["amount"])
 
         if side == "buy":
-            buy_orders_count += 1
             if filled != amount:
                 print(f"WARNING: buy order {id} was partially filled")
             buy_orders.append(order)
-            total += filled
+            reconciliation_actions.replay_orders_shares_tally += filled
         else:
-            sell_orders_count += 1
             order_info = order["info"]
             completion_pct = Decimal(order_info["completion_percentage"])
-            total -= filled
+            reconciliation_actions.replay_orders_shares_tally -= filled
             print(f"{ticker_pair} evaluating sell order:{id}, date: {order['datetime']}, completion percent: {completion_pct}")
 
             if completion_pct == ZERO:
@@ -246,12 +245,11 @@ def reconcile_with_exchange(ticker_pair: str, exchange_orders) -> Reconciliation
     pprint.pprint(actions, depth=10)
     
     #calculate current position based on the recon actions
-    recon_total = 0
     for buy_inserts in reconciliation_actions.buy_order_insertions:
-        recon_total += buy_inserts["filled"]
+        reconciliation_actions.recon_actions_shares_tally += Decimal(buy_inserts["filled"])
     for buy_updates in reconciliation_actions.buy_order_updates:
-        recon_total += buy_updates["filled"]
+        reconciliation_actions.recon_actions_shares_tally += Decimal(buy_updates["filled"])
 
-    print(f"{ticker_pair} tally of recon actions, {recon_total} shares")
-    print(f"{ticker_pair} tally of replaying all orders {total} shares")
+    print(f"{ticker_pair} tally of recon actions, {reconciliation_actions.recon_actions_shares_tally} shares")
+    print(f"{ticker_pair} tally of replaying all orders {reconciliation_actions.replay_orders_shares_tally} shares")
     return reconciliation_actions

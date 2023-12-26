@@ -2,6 +2,7 @@ from decimal import *
 
 ZERO = Decimal(0)
 ONE = Decimal(1)
+FIVE = Decimal(5)
 ONE_HUNDRED = Decimal(100)
 
 DEFAULT_MONGO_DB_NAME = "crypto-bot"

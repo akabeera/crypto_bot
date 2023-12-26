@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from utils.exchange_service import ExchangeService
 from utils.mongodb_service import MongoDBService
 from utils.reconciliation import ReconciliationActions, reconcile_with_exchange, apply_reconciliation_to_db
-from utils.constants import DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION
+from utils.constants import DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, FIVE
 
 load_dotenv()
 
@@ -70,21 +70,32 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
 
         print(f"{ticker_pair} has {len(exchange_orders)} orders, replaying all orders")
         actions = reconcile_with_exchange(ticker_pair, exchange_orders)
+        actions.sell_order_collection = SELL_ORDERS_COLLECTION
+        actions.buy_order_collection = TRADES_COLLECTION
 
-        reconciliation_actions = ReconciliationActions()
-        reconciliation_actions.sell_order_collection = SELL_ORDERS_COLLECTION
-        reconciliation_actions.buy_order_collection = TRADES_COLLECTION
-        reconciliation_actions.sell_order_deletions.extend(actions.sell_order_deletions) 
-        reconciliation_actions.sell_order_insertions.extend(actions.sell_order_insertions)
-        reconciliation_actions.buy_order_deletions.extend(actions.buy_order_deletions)
-        reconciliation_actions.buy_order_updates.extend(actions.buy_order_updates)
-        reconciliation_actions.buy_order_insertions.extend(actions.buy_order_insertions)
+        if not actions.can_automatically_reconcile():
+            print(f"actions tally don't match replay orders tally, skipping recon")
+            continue
+
+        ticker_info = exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
+        if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
+            print(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
+            continue
+
+        bid_price = Decimal(ticker_info['bid'])
+        recon_value = bid_price * actions.recon_actions_shares_tally
+        print(f"{ticker_pair} recovering value of {recon_value} after recon")
+
+        if recon_value < FIVE:
+            print(f"{ticker_pair} recon value is only {recon_value}, not worth applying to DB, skipping")
+            continue        
 
         if dry_run:
+            print(f"{ticker_pair} dry_run flag enabled, skipping apply to DB")
             continue
         
         print(f"{ticker_pair} applying reconciliation actions to DB")
-        apply_reconciliation_to_db(reconciliation_actions, mongodb_service)
+        apply_reconciliation_to_db(actions, mongodb_service)
 
 
 if __name__ == "__main__":
