@@ -23,12 +23,17 @@ class CryptoBot:
     def __init__(self, db_connection_string):
         with open(CONFIG_FILE) as f:
             self.config = json.load(f)
+        
+        self.ticker_cooldown_periods = {}
 
         self.max_spend = Decimal(self.config["max_spend"])
         self.amount_per_transaction = Decimal(self.config["amount_per_transaction"])
         self.reinvestment_percent = Decimal(self.config["reinvestment_percent"]/100)
         self.remaining_balance = self.max_spend
         self.limit_order_time_limit = 10
+        self.cooldown_num_periods = 10
+        if "cooldown_num_periods" in self.config:
+            self.cooldown_num_periods = self.config["cooldown_num_periods"]
 
         self.currency: str = self.config["currency"]
         self.sleep_interval = self.config["sleep_interval"]
@@ -48,7 +53,10 @@ class CryptoBot:
         self.mongodb_service = MongoDBService(db_connection_string, self.mongodb_db_name)
 
         exchange_config = self.config["exchange"]
-        self.exchange_service = ExchangeService(exchange_config)       
+        self.exchange_service = ExchangeService(exchange_config)
+
+        for ticker in self.supported_crypto_list:
+            self.ticker_cooldown_periods[ticker] = []
 
         self.init_strategies()
 
@@ -143,6 +151,8 @@ class CryptoBot:
 
             ask_price = ticker_info['ask']
             bid_price = ticker_info['bid']
+
+
     
             for priority in self.strategies_priorities:
                 current_strategies = self.strategies[priority]
@@ -163,6 +173,7 @@ class CryptoBot:
                             action = TradeAction.NOOP
                             break
 
+                self.handle_cooldown(ticker_pair)
                 if action == TradeAction.BUY:
                     logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
@@ -192,9 +203,11 @@ class CryptoBot:
 
 
     def handle_sell_order(self, ticker_pair: str, shares: float, bid_price: float):
-        #order = self.create_sell_limit_order(ticker_pair, shares, bid_price)
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=shares, price=bid_price, order_type="sell")
+        if self.ticker_in_cooldown(ticker_pair):
+            logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
+            return
 
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=shares, price=bid_price, order_type="sell")
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute set order")
             return
@@ -215,4 +228,32 @@ class CryptoBot:
         if self.reinvestment_percent > ZERO:
             self.remaining_balance += (Decimal(proceeds) * self.reinvestment_percent)
 
+        self.ticker_cooldown_periods[ticker_pair].append(time.time())
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
+
+    def ticker_in_cooldown(self, ticker_pair):
+        if ticker_pair not in self.cooldown_num_periods:
+            logger.error(f"{ticker_pair} no entry in cooldown, aborting")
+            return False
+        
+        periods = self.ticker_cooldown_periods[ticker_pair]
+        if len(periods) < self.cooldown_num_periods +  1:
+            return False
+        
+        return True
+
+    def handle_cooldown(self, ticker_pair):
+        if ticker_pair not in self.cooldown_num_periods:
+            logger.warn(f"{ticker_pair} no cooldown entry")
+            return 
+        
+        periods = self.ticker_cooldown_periods[ticker_pair]
+        if len(periods) == 0:
+            return
+        
+        self.ticker_cooldown_periods.append(time.time())
+        if len(periods) > self.cooldown_num_periods + 1:
+            logger.info(f"{ticker_pair}: resetting cooldown")
+            periods.clear()
+
+ 
