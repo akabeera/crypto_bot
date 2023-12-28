@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from utils.exchange_service import ExchangeService
 from utils.mongodb_service import MongoDBService
 from utils.reconciliation import ReconciliationActions, reconcile_with_exchange, apply_reconciliation_to_db
-from utils.constants import DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, FIVE
+from utils.constants import DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, DEFAULT_MONGO_SNAPSHOTS_COLLECTION, FIVE
 
 load_dotenv()
 
@@ -64,6 +64,17 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
     print(f"Starting recon process")
     total_recon_value = Decimal(0)  
     tickers_applied_recon = []
+
+    if not dry_run:
+        print("creating a snapshot of DB")
+        collections_to_backup = [
+            DEFAULT_MONGO_SELL_ORDERS_COLLECTION,
+            DEFAULT_MONGO_TRADES_COLLECTION
+        ]
+        snapshot = mongodb_service.snapshot(DEFAULT_MONGO_SNAPSHOTS_COLLECTION, collections_to_backup, "backup before IOTX reconciliation")
+        if snapshot is None:
+            print("An error occurred while backing up, aborting reconciliation")
+            return
 
     for ticker_pair in ticker_pairs:
         print("\n\n")
@@ -122,9 +133,9 @@ if __name__ == "__main__":
 
     if args.op:
         if args.op == "add_order":
-            add_orders(args.orders, args.ticker_pair)
+            add_orders(args.orders, args.ticker_pairs)
         if args.op == "get_orders":
-            get_orders(args.orders, args.ticker_pair)
+            get_orders(args.orders, args.ticker_pairs)
         if args.op == "recon":
             dry_run = args.dry_run == "True"
             ticker_pairs = args.ticker_pairs.split(",")

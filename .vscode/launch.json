@@ -35,7 +35,7 @@
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",     
-            "args": ["--ticker_pairs=FIL/USD,SHIB/USD,COMP/USD,IOTX/USD,AVAX/USD,WCFG/USD,SOL/USD,ICP/USD,MANA/USD,DOGE/USD,BNT/USD,SNT/USD,ATOM/USD,DOT/USD,MATIC/USD,OXT/USD,AMP/USD,ASM/USD,LPT/USD,ACH/USD,LRC/USD,BAND/USD,ETH/USD,PLA/USD,BTC/USD,XLM/USD", "--op=recon", "--dry_run=True"],
+            "args": ["--ticker_pairs=FIL/USD,SHIB/USD,COMP/USD,IOTX/USD,AVAX/USD,WCFG/USD,SOL/USD,ICP/USD,MANA/USD,DOGE/USD,BNT/USD,SNT/USD,ATOM/USD,DOT/USD,MATIC/USD,OXT/USD,AMP/USD,ASM/USD,LPT/USD,ACH/USD,LRC/USD,BAND/USD,ETH/USD,PLA/USD,BTC/USD,XLM/USD", "--op=recon", "--dry_run=False"],
        
             "justMyCode": true
         },

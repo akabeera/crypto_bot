@@ -104,7 +104,9 @@
         "AMP",
         "SHIB",
         "COMP",
-        "ATOM"
+        "ATOM",
+        "IOTX",
+        "BTC"
     ],
     "blacklisted_currencies": []
 }

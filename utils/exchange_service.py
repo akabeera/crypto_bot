@@ -133,7 +133,7 @@ class ExchangeService:
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
-            time.sleep(2)
+            time.sleep(4)
             order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", order_id=order_id)
             if (order == None):
                 return None

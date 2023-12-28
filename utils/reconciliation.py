@@ -120,15 +120,6 @@ def apply_reconciliation_to_db(reconcilation_actions: ReconciliationActions, mon
         buy_order_collection = reconcilation_actions.buy_order_collection
         sell_order_collection = reconcilation_actions.sell_order_collection
         
-        collections_to_backup = [
-            buy_order_collection,
-            sell_order_collection
-        ]
-        snapshot = mongodb_service.snapshot(DEFAULT_MONGO_SNAPSHOTS_COLLECTION, collections_to_backup, "backup before IOTX reconciliation")
-        if snapshot is None:
-            print("An error occurred while backing up, aborting reconciliation")
-            return
-
         sell_order_insertions = reconcilation_actions.sell_order_insertions
         for sell_order in sell_order_insertions:
             id = sell_order["sell_order"]["id"]
