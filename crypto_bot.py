@@ -187,6 +187,10 @@ class CryptoBot:
             time.sleep(self.inter_currency_sleep_interval)
     
     def handle_buy_order(self, ticker_pair: str):
+        if self.ticker_in_cooldown(ticker_pair):
+            logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
+            return
+
         if self.remaining_balance < self.amount_per_transaction:
             logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
             return
@@ -197,16 +201,12 @@ class CryptoBot:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
             return
         self.remaining_balance -= self.amount_per_transaction
-
         self.mongodb_service.insert_one(self.current_positions_collection, order)
+        self.ticker_cooldown_periods[ticker_pair].append(time.time())
         logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
 
     def handle_sell_order(self, ticker_pair: str, shares: float, bid_price: float):
-        if self.ticker_in_cooldown(ticker_pair):
-            logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
-            return
-
         order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=shares, price=bid_price, order_type="sell")
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute set order")
@@ -228,7 +228,6 @@ class CryptoBot:
         if self.reinvestment_percent > ZERO:
             self.remaining_balance += (Decimal(proceeds) * self.reinvestment_percent)
 
-        self.ticker_cooldown_periods[ticker_pair].append(time.time())
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
 
     def ticker_in_cooldown(self, ticker_pair):
@@ -236,7 +235,7 @@ class CryptoBot:
             logger.error(f"{ticker_pair} no entry in cooldown, aborting")
             return False
         
-        periods = self.ticker_cooldown_periods[ticker_pair]
+        periods = self.ticker_cooldown_periods[ticker_pair]        
         if len(periods) < self.cooldown_num_periods +  1:
             return False
         
