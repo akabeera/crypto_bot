@@ -3,13 +3,11 @@ import argparse
 import pprint
 from decimal import *
 
-
 from dotenv import load_dotenv
 from utils.exchange_service import ExchangeService
 from utils.mongodb_service import MongoDBService
-from utils.reconciliation import ReconciliationActions, handle_partial_order
-from utils.constants import ZERO, ONE_HUNDRED, DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION
-
+from utils.reconciliation import ReconciliationActions, reconcile_with_exchange, apply_reconciliation_to_db
+from utils.constants import DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, DEFAULT_MONGO_SNAPSHOTS_COLLECTION, FIVE
 
 load_dotenv()
 
@@ -61,39 +59,66 @@ def get_orders(orders: str, ticker_pair: str):
 
         pprint.pprint(order)
 
+def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
+    
+    print(f"Starting recon process")
+    total_recon_value = Decimal(0)  
+    tickers_applied_recon = []
 
-def reconcile(ticker_pair: str):
-    filter = {
-        'sell_order.symbol': ticker_pair
-    }
+    if not dry_run:
+        print("creating a snapshot of DB")
+        collections_to_backup = [
+            DEFAULT_MONGO_SELL_ORDERS_COLLECTION,
+            DEFAULT_MONGO_TRADES_COLLECTION
+        ]
+        snapshot = mongodb_service.snapshot(DEFAULT_MONGO_SNAPSHOTS_COLLECTION, collections_to_backup, "backup before IOTX reconciliation")
+        if snapshot is None:
+            print("An error occurred while backing up, aborting reconciliation")
+            return
 
-    #db_sell_orders = mongodb_service.query(SELL_ORDERS_COLLECTION, filter)
-    exchange_orders = exchange_service.execute_op(ticker_pair, "fetchOrders")
-    buy_orders = []
-
-    for idx, order in enumerate(exchange_orders):
-        side = order['side']
-
-        if side == "buy":
-            buy_orders.append(order)
-            continue 
-
-        order_info = order["info"]
-        completion_pct = Decimal(order_info["completion_percentage"])
+    for ticker_pair in ticker_pairs:
+        print("\n\n")
+        print(f"{ticker_pair}")
+        exchange_orders = exchange_service.execute_op(ticker_pair, "fetchOrders")
         
-        if completion_pct == ZERO:
+        if exchange_orders is None:
+            print("ERROR: Failed to fetch orders from exchange for {ticker_pair}, aborting")
             continue
 
-        if completion_pct == ONE_HUNDRED:
-            buy_orders.clear()
+        print(f"{ticker_pair} has {len(exchange_orders)} orders, replaying all orders")
+        actions = reconcile_with_exchange(ticker_pair, exchange_orders)
+        actions.sell_order_collection = SELL_ORDERS_COLLECTION
+        actions.buy_order_collection = TRADES_COLLECTION
+
+        if not actions.can_automatically_reconcile():
+            print(f"actions tally don't match replay orders tally, skipping recon")
             continue
 
-        reconcilation_actions = handle_partial_order(order, buy_orders)
-        reconcilation_actions.sell_order_collection = SELL_ORDERS_COLLECTION
-        reconcilation_actions.buy_order_collection = TRADES_COLLECTION
+        ticker_info = exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
+        if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
+            print(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
+            continue
 
-        mongodb_service.reconciliation(reconcilation_actions)
-        buy_orders.clear()
+        bid_price = Decimal(ticker_info['bid'])
+        recon_value = bid_price * actions.recon_actions_shares_tally
+
+        if recon_value < FIVE:
+            print(f"{ticker_pair} recon value is only {recon_value}, not worth applying to DB, skipping")
+            continue        
+        
+        print(f"{ticker_pair} recovering value of {recon_value} after recon")
+        total_recon_value += recon_value
+        tickers_applied_recon.append(ticker_pair)
+        if dry_run:
+            print(f"{ticker_pair} dry_run flag enabled, skipping apply to DB")
+            continue
+        
+        print(f"{ticker_pair} applying reconciliation actions to DB")
+        apply_reconciliation_to_db(actions, mongodb_service)
+
+    print("\nrecon summary:")
+    print(f"{ticker_pair} tickers applied recon: {','.join(tickers_applied_recon)}")
+    print(f"{ticker_pair} total value of applied recon actions {total_recon_value}")
 
 
 if __name__ == "__main__":
@@ -101,17 +126,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--op", help="the operation you want to perform")
     parser.add_argument("--orders", help="comma separated list of order numbers")
-    parser.add_argument("--ticker_pair", help="ticker pair")
+    parser.add_argument("--ticker_pairs", help="ticker pairs list")
+    parser.add_argument("--dry_run", help="dry run", default="True", type=str)
 
     args = parser.parse_args()
 
     if args.op:
         if args.op == "add_order":
-            add_orders(args.orders, args.ticker_pair)
+            add_orders(args.orders, args.ticker_pairs)
         if args.op == "get_orders":
-            get_orders(args.orders, args.ticker_pair)
+            get_orders(args.orders, args.ticker_pairs)
         if args.op == "recon":
-            reconcile(args.ticker_pair)
+            dry_run = args.dry_run == "True"
+            ticker_pairs = args.ticker_pairs.split(",")
+            reconcile_db_with_exchange(ticker_pairs, dry_run)
     else:
         print("no op argument")
 

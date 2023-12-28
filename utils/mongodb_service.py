@@ -1,10 +1,11 @@
+import datetime
+import uuid
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure, PyMongoError
-from utils.reconciliation import ReconciliationActions
-import urllib.parse
 
 class MongoDBService:
     _client = None
+    _backup_collection = "snapshots"
 
     @classmethod
     def _get_client(cls, db_url):
@@ -49,10 +50,10 @@ class MongoDBService:
 
         except OperationFailure as e:
             # Handle failed operation details
-            print(f"Operation failed: {e}")
+            print(f"Operation failed in query: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred while querying: {e}")
+            print(f"An error occurred while query: {e}")
 
     def insert_one(self, collection, document):
         try:
@@ -60,28 +61,28 @@ class MongoDBService:
                 raise OperationFailure("Database not accessible")
             
             coll = self.db[collection]
-            coll.insert_one(document)
+            return coll.insert_one(document)
 
         except OperationFailure as e:
             # Handle failed operation details
-            print(f"Operation failed: {e}")
+            print(f"Operation failed in insert_one: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred while querying: {e}")
+            print(f"An error occurred while insert_one: {e}")
 
-    def update_one(self, collection, document, filter_dict, upsert = False):
+    def replace_one(self, collection, document, filter_dict, upsert = False):
         try:
             if self.db is None:
                 raise OperationFailure("Database not accessible")
             coll = self.db[collection]
-            return coll.update_one(filter_dict, document, upsert)
+            return coll.replace_one(filter_dict, document, upsert)
 
         except OperationFailure as e:
             # Handle failed operation details
-            print(f"Operation failed in update_one: {e}")
+            print(f"Operation failed in replace_one: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred in update_one: {e}")
+            print(f"An error occurred in replace_one: {e}")
 
 
     def delete_many(self, collection, filter_dict=None):
@@ -100,50 +101,36 @@ class MongoDBService:
             print(f"Operation failed: {e}")
         except PyMongoError as e:
             # Handle any other PyMongo errors
-            print(f"An error occurred in deleteMany: {e}")
-
-
-    def reconciliation(self, reconcilation_actions:ReconciliationActions):
+            print(f"An error occurred in delete_many: {e}")
+    
+    def snapshot(self, snapshot_collection, collections_to_backup, description = "", start_time = None):
         try:
-            if reconcilation_actions is None:
-                return
+            collections = {}
+            for col in collections_to_backup:
+                documents = self.query(col)
+                collections[col] = documents
 
-            sell_order_insertions = reconcilation_actions.sell_order_insertions
-            if len(sell_order_insertions) > 0:
-                for sell_order in sell_order_insertions:
-                    id = sell_order["sell_order"]["id"]
-                    query_filter = {
-                        'id': id
-                    }
+            now = datetime.datetime.now()
+            timestamp = now.timestamp()
+            snapshot = {
+                "id": str(uuid.uuid4()),
+                "timestamp": timestamp,
+                "since": start_time,
+                "description": description,
+                "collections": collections 
+            }
 
-                    curr_sell_order = self.query(reconcilation_actions.sell_order_collection, query_filter)
-                    if len(curr_sell_order) > 0:
-                        print(f"WARNING: sell order already exists {id}, skipping")
-                        continue
-
-                    self.insert_one(reconcilation_actions.sell_order_collection, sell_order)
-
-            buy_order_deletions = reconcilation_actions.buy_order_deletions
-            if len(buy_order_deletions) > 0:
-                to_delete_list = []
-                for buy_order in buy_order_deletions:
-                    to_delete_list.append(buy_order["id"])
-
-                delete_filter = {
-                    'id': {"$in": to_delete_list}
-                }
-                delete_many_result = self.delete_many(reconcilation_actions.buy_order_collection, delete_filter)
-
-            buy_order_updates = reconcilation_actions.buy_order_updates
-            if len(buy_order_updates) > 0:
-                for buy_order in buy_order_updates:
-                    update_filter = {
-                        'id': buy_order['id']
-                    }
-                    self.update_one(reconcilation_actions.buy_order_collection, buy_order, update_filter, True)                  
-
+            return self.insert_one(snapshot_collection, snapshot)
+            
+        except OperationFailure as e:
+            # Handle failed operation details
+            print(f"Operation failed during snapshot: {e}")
+            return None
         except PyMongoError as e:
-            print(f"An error occurred in deleteMany: {e}")
+            # Handle any other PyMongo errors
+            print(f"An error occurred in snapshot: {e}")
+            return None
+
 
 
     @classmethod

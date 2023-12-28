@@ -1,5 +1,5 @@
 {
-    "max_spend": 200,
+    "max_spend": 350,
     "amount_per_transaction": 50,
     "reinvestment_percent": 100,
     "sleep_interval": 10,
@@ -104,7 +104,9 @@
         "AMP",
         "SHIB",
         "COMP",
-        "ATOM"
+        "ATOM",
+        "IOTX",
+        "BTC"
     ],
     "blacklisted_currencies": []
 }

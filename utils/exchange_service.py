@@ -4,8 +4,8 @@ import json
 import time
 from dotenv import load_dotenv
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
-
 from utils.logger import logger
+from utils.constants import AUG_FIRST_TIMESTAMP_MS
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
@@ -51,7 +51,7 @@ class ExchangeService:
     def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, total_cost = None, order_type:str = None, order_id: str = None):
         try:
             if not self.exchange_client.has[op]:
-                logger.warn(f"{ticker_pair}: exchange does not support op:{op}")
+                logger.warn(f"{ticker_pair}: exchange does not support op: {op}")
                 return None
                         
             if op == "fetchTicker":
@@ -62,7 +62,7 @@ class ExchangeService:
                 order = self.exchange_client.fetch_order(order_id)
                 return order
             elif op == "fetchOrders":
-                return self.exchange_client.fetch_orders(ticker_pair, 1690891200, 1000)
+                return self.exchange_client.fetch_orders(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 500)
             elif op == "createOrder":                
                 market_order_type = self.market_order_type_buy if order_type == "buy" else self.market_order_type_sell
 
@@ -79,7 +79,9 @@ class ExchangeService:
                  self.exchange_client.cancel_order(order_id, ticker_pair)
                  return None
             elif op == "fetchMyTrades":
-                return self.exchange_client.fetch_my_trades(ticker_pair, 1690891200, 1000)
+                return self.exchange_client.fetch_my_trades(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
+            elif op == "fetchTransactions":
+                return self.exchange_client.fetch_transactions(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
             else:
                 logger.error(f"{ticker_pair}: unsupported exchange operation: {op}")
                 return None
@@ -131,7 +133,7 @@ class ExchangeService:
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
-            time.sleep(2)
+            time.sleep(4)
             order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", order_id=order_id)
             if (order == None):
                 return None
