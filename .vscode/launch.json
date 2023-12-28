@@ -47,6 +47,15 @@
             "console": "integratedTerminal",     
             "args": ["--ticker=WCFG/USD", "--op=get_orders", "--orders=8986e12d-28a2-4d75-9f8f-959264bb5dd1"],
             "justMyCode": true
-        }
+        },
+        {
+            "name": "Admin Add Sell Order",
+            "type": "python",
+            "request": "launch",
+            "module": "admin.main",
+            "console": "integratedTerminal",
+            "args": ["--ticker=FIL/USD", "--op=add_sell_order", "--orders=aa6ed897-f8a7-44b1-937f-37ae36329a31"],
+            "justMyCode": false
+        },
     ]
 }
