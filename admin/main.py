@@ -28,7 +28,7 @@ exchange_config = {
 exchange_service = ExchangeService(exchange_config)
 
 
-def add_orders(orders: str, ticker_pair: str):
+def add_buy_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
 
     for order_id in order_list:
@@ -47,6 +47,42 @@ def add_orders(orders: str, ticker_pair: str):
 
         print(f"Inserting order_id {order_id} into {TRADES_COLLECTION} table")
         mongodb_service.insert_one(TRADES_COLLECTION, order)
+
+def add_sell_orders(orders: str, ticker_pair: str):
+    order_list = orders.split(",")
+
+    for order_id in order_list:
+        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        if not order:
+            print(f"Error fetching order id: {order_id}")
+            continue
+
+        order_id_filter = {
+                'id': order_id
+            }    
+        check_order = mongodb_service.query(SELL_ORDERS_COLLECTION, order_id_filter)
+        if len(check_order) > 0:
+            print(f"{order_id} already exists in DB, skipping")
+            continue
+
+        positions_filter = {
+            "symbol": ticker_pair
+        }
+
+        positions = mongodb_service.query(TRADES_COLLECTION, positions_filter)
+        if len(positions) == 0:
+            print(f"no positions found for {ticker_pair} in DB, can't add sell order")
+            continue
+
+        sell_order = {
+            "sell_order": order,
+            "closed_positions": positions
+        }
+
+        print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
+        mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
+        mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+        
 
 def get_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
@@ -132,8 +168,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.op:
-        if args.op == "add_order":
-            add_orders(args.orders, args.ticker_pairs)
+        if args.op == "add_buy_order":
+            add_buy_orders(args.orders, args.ticker_pairs)
+        if args.op == "add_sell_order":
+            add_sell_orders(args.orders, args.ticker_pairs)
         if args.op == "get_orders":
             get_orders(args.orders, args.ticker_pairs)
         if args.op == "recon":
