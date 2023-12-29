@@ -56,7 +56,7 @@ class CryptoBot:
         self.exchange_service = ExchangeService(exchange_config)
 
         for ticker in self.supported_crypto_list:
-            self.ticker_cooldown_periods[ticker] = []
+            self.ticker_cooldown_periods[ticker + "/USD"] = []
 
         self.init_strategies()
 
@@ -152,11 +152,11 @@ class CryptoBot:
             ask_price = ticker_info['ask']
             bid_price = ticker_info['bid']
 
-
     
             for priority in self.strategies_priorities:
                 current_strategies = self.strategies[priority]
 
+                self.handle_cooldown(ticker_pair)
                 action = TradeAction.NOOP
                 for s_idx, strgy in enumerate(current_strategies):
                     curr_strat_name = strgy.name
@@ -173,7 +173,6 @@ class CryptoBot:
                             action = TradeAction.NOOP
                             break
 
-                self.handle_cooldown(ticker_pair)
                 if action == TradeAction.BUY:
                     logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
@@ -231,7 +230,7 @@ class CryptoBot:
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
 
     def ticker_in_cooldown(self, ticker_pair):
-        if ticker_pair not in self.cooldown_num_periods:
+        if ticker_pair not in self.ticker_cooldown_periods:
             logger.error(f"{ticker_pair} no entry in cooldown, aborting")
             return False
         
@@ -242,15 +241,14 @@ class CryptoBot:
         return True
 
     def handle_cooldown(self, ticker_pair):
-        if ticker_pair not in self.cooldown_num_periods:
-            logger.warn(f"{ticker_pair} no cooldown entry")
+        if ticker_pair not in self.ticker_cooldown_periods:
             return 
         
         periods = self.ticker_cooldown_periods[ticker_pair]
         if len(periods) == 0:
             return
         
-        self.ticker_cooldown_periods.append(time.time())
+        self.ticker_cooldown_periods[ticker_pair].append(time.time())
         if len(periods) > self.cooldown_num_periods + 1:
             logger.info(f"{ticker_pair}: resetting cooldown")
             periods.clear()
