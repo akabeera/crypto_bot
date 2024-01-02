@@ -6,8 +6,13 @@ from utils.trading import TradeAction
 class BaseStrategy:
     def __init__(self, config):
         self.name = config["name"]
-        pass
-
+        self.prevent_loss = True
+        if "prevent_loss" in config:
+            self.prevent_loss = config["prevent_loss"]
+        self.enabled = True
+        if "enabled" in config:
+            self.enabled = config["enabled"]
+        
     def eval(self, avg_position, candles_df, ticker_info) -> TradeAction:
         pass
 

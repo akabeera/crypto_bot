@@ -151,7 +151,6 @@ class CryptoBot:
 
             ask_price = ticker_info['ask']
             bid_price = ticker_info['bid']
-
     
             for priority in self.strategies_priorities:
                 current_strategies = self.strategies[priority]

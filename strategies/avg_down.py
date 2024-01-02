@@ -14,6 +14,9 @@ class AverageDown(BaseStrategy):
         super().__init__(config)
 
     def eval(self, avg_position, candles_df, ticker_info):
+        if not self.enabled:
+            return TradeAction.NOOP
+        
         if avg_position == None:
             return TradeAction.NOOP
         

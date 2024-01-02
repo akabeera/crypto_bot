@@ -2,10 +2,10 @@
     "max_spend": 1000,
     "amount_per_transaction": 50,
     "reinvestment_percent": 100,
-    "sleep_interval": 10,
+    "sleep_interval": 60,
     "cooldown_num_periods": 5,
     "currency": "USD",
-    "inter_currency_sleep_interval": 1,
+    "inter_currency_sleep_interval": 30,
     "exchange_id": "coinbase",
     "mongodb":{
         "db_name": "crypto-bot",
@@ -23,6 +23,7 @@
         {
             "name": "TAKE_PROFIT",
             "priority": 0,
+            "enabled": false,
             "parameters": {
                 "threshold_percent": 2
             } 
@@ -50,6 +51,19 @@
             "parameters": {
                 "overbought_signal_threshold": 75,
                 "oversold_signal_threshold": 20
+            }
+        },
+        {
+            "name": "ADAPTIVE_RSI",
+            "priority": 2,
+            "parameters": {
+                "default_upper_threshold": 70,
+                "default_lower_threshold": 30,
+                "volatility_factor": 1000,
+                "rsi_period": 14,
+                "normalization_factor": 100000,
+                "trend_ma_period": 50,
+                "trend_factor": 500
             }
         },
         {
