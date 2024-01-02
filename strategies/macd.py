@@ -16,6 +16,9 @@ class MACD(BaseStrategy):
 
 
     def eval(self, avg_position, candles_df, ticker_info):
+        if not self.enabled:
+            return TradeAction.NOOP
+        
         macd_key = "MACD"
         macd_signal_key = "MACD_signal"
 
@@ -29,12 +32,14 @@ class MACD(BaseStrategy):
         prev_macd = prev_row[macd_key]
         prev_macd_signal = prev_row[macd_signal_key]
 
+        ticker = ticker_info["symbol"]
+
         action = TradeAction.NOOP
         if macd_signal < macd and macd_signal > 0:
-            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
+            logger.debug(f'{ticker}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
         elif macd_signal > macd and macd_signal < 0:
-            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal')
+            logger.debug(f'{ticker}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:
