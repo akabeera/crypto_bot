@@ -1,9 +1,9 @@
 {
-    "max_spend": 160,
+    "max_spend": 250,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 10,
-    "cooldown_num_periods": 15,
+    "cooldown_num_periods": 30,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",

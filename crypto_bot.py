@@ -152,11 +152,11 @@ class CryptoBot:
             ask_price = ticker_info['ask']
             bid_price = ticker_info['bid']
 
-    
+            self.handle_cooldown(ticker_pair)
+
             for priority in self.strategies_priorities:
                 current_strategies = self.strategies[priority]
 
-                self.handle_cooldown(ticker_pair)
                 action = TradeAction.NOOP
                 for s_idx, strgy in enumerate(current_strategies):
                     curr_strat_name = strgy.name
