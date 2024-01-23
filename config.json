@@ -23,7 +23,7 @@
         {
             "name": "TAKE_PROFIT",
             "priority": 0,
-            "enabled": false,
+            "enabled": true,
             "parameters": {
                 "threshold_percent": 2
             } 
@@ -56,6 +56,7 @@
         {
             "name": "ADAPTIVE_RSI",
             "priority": 2,
+            "enabled": false,
             "parameters": {
                 "default_upper_threshold": 70,
                 "default_lower_threshold": 30,
