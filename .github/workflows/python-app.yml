@@ -38,9 +38,8 @@ jobs:
         make
         sudo make install
 
-    - name: Install dependencies
+    - name: Install crypto-bot dependencies
       run: |
-        sudo 
         python -m pip install --upgrade pip
         pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
