@@ -28,7 +28,7 @@ class RSI(BaseStrategy):
 
         ticker = ticker_info["symbol"]
 
-        logger.info(f"{ticker}: REGULAR RSI: {rsi}")
+        #logger.info(f"{ticker}: REGULAR RSI: {rsi}")
 
         action = TradeAction.NOOP
         if rsi > self.overbought_signal_threshold:

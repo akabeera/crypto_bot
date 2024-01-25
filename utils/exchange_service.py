@@ -76,8 +76,7 @@ class ExchangeService:
                     return self.create_order(ticker_pair, shares, market_order_type, order_type, price)
          
             elif op == "cancelOrder":
-                 self.exchange_client.cancel_order(order_id, ticker_pair)
-                 return None
+                 return self.exchange_client.cancel_order(order_id, ticker_pair)
             elif op == "fetchMyTrades":
                 return self.exchange_client.fetch_my_trades(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
             elif op == "fetchTransactions":

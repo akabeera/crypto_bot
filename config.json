@@ -2,11 +2,15 @@
     "max_spend": 250,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
-    "sleep_interval": 10,
-    "cooldown_num_periods": 30,
+    "sleep_interval": 1,
+    "cooldown_num_periods": 60,
     "currency": "USD",
-    "inter_currency_sleep_interval": 30,
+    "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
+    "take_profits": {
+        "threshold_percent": 2,
+        "evaluation_type": "AVERAGE" 
+    },
     "mongodb":{
         "db_name": "crypto-bot",
         "current_positions_collection": "trades",
@@ -32,7 +36,7 @@
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 15,
+                "threshold_percent": 20,
                 "num_times": 2
             } 
         },
@@ -107,7 +111,7 @@
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 20
+                        "threshold_percent": 25
                     }
                 }
             ]

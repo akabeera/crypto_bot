@@ -20,7 +20,7 @@ class BaseStrategy:
         if avg_position is None:
             return TradeAction.NOOP
         
-        profit_pct = calculate_profit_percent(avg_position, ticker_info)
+        profit_pct = calculate_profit_percent(avg_position, ticker_info["bid"])
         if profit_pct < Decimal(.005):
             logger.debug(f'{ticker_info["symbol"]}: {self.name} prevent_loss forced HOLD signal, profit: {profit_pct}')
             curr_action = TradeAction.HOLD

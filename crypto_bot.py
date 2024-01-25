@@ -6,10 +6,10 @@ from decimal import *
 from dotenv import load_dotenv
 
 from strategies.strategy_factory import strategy_factory
-from utils.trading import TradeAction, calculate_profit_percent, calculate_avg_position
+from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
-from utils.constants import ZERO
+from utils.constants import ZERO, DEFAULT_TAKE_PROFIT_THRESHOLD, DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
 from utils.logger import logger
 
 load_dotenv()
@@ -57,6 +57,17 @@ class CryptoBot:
 
         for ticker in self.supported_crypto_list:
             self.ticker_cooldown_periods[ticker + "/USD"] = []
+
+        take_profit_threshold = DEFAULT_TAKE_PROFIT_THRESHOLD
+        take_profit_evaluation_type = DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
+
+        if "take_profits" in self.config:
+            take_profits_config = self.config["take_profits"]
+            take_profit_threshold = take_profits_config["threshold_percent"]
+            take_profit_evaluation_type = take_profits_config["evaluation_type"]
+
+        self.take_profit_threshold = Decimal(take_profit_threshold/100)
+        self.take_profit_evaluation_type = TakeProfitEvaluationType[take_profit_evaluation_type]
 
         self.init_strategies()
 
@@ -125,13 +136,7 @@ class CryptoBot:
             ticker:str = self.supported_crypto_list[idx]
             idx += 1 
 
-            ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())
-            ticker_filter = {
-                'symbol': ticker_pair
-            }
-            trades = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
-            avg_position = calculate_avg_position(trades)       
-
+            ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())      
             ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchOHLCV")
             if ohlcv == None or len(ohlcv) == 0:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
@@ -144,6 +149,12 @@ class CryptoBot:
                 logger.warn(f"{ticker_pair}: not enough candles({r}), skipping")
                 continue
 
+            ticker_filter = {
+                'symbol': ticker_pair
+            }
+            all_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
+            avg_position = calculate_avg_position(all_positions) 
+
             ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
             if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
                 logger.error(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
@@ -152,35 +163,39 @@ class CryptoBot:
             ask_price = ticker_info['ask']
             bid_price = ticker_info['bid']
 
-            self.handle_cooldown(ticker_pair)
+            profits_results = self.evaluate_profits(ticker_pair, avg_position, all_positions, bid_price)
+            if profits_results is not None:
+                logger.info(f"{ticker_pair}: took profits and exited positions, skipping strategy evaluation")
+                continue
 
+            self.handle_cooldown(ticker_pair)
             for priority in self.strategies_priorities:
                 current_strategies = self.strategies[priority]
 
-                action = TradeAction.NOOP
-                for s_idx, strgy in enumerate(current_strategies):
-                    curr_strat_name = strgy.name
+                trade_action = TradeAction.NOOP
+                for s_idx, strategy in enumerate(current_strategies):
+                    curr_strat_name = strategy.name
                     curr_action = TradeAction.NOOP
+                    strategy_to_run = strategy
                     if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
-                            curr_action = self.strategies_overrides[ticker_pair][curr_strat_name].eval(avg_position, candles_df, ticker_info)
-                    else: 
-                        curr_action = strgy.eval(avg_position, candles_df, ticker_info)    
+                        strategy_to_run = self.strategies_overrides[ticker_pair][curr_strat_name]
+                    
+                    strategy_to_run.eval(avg_position, candles_df, ticker_info)    
 
                     if s_idx == 0:
-                        action = curr_action
+                        trade_action = curr_action
                     else:
-                        if action != curr_action:
-                            action = TradeAction.NOOP
+                        if trade_action != curr_action:
+                            trade_action = TradeAction.NOOP
                             break
 
-                if action == TradeAction.BUY:
+                if trade_action == TradeAction.BUY:
                     logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
                     break
-                elif action == TradeAction.SELL:
-                    expected_profit = calculate_profit_percent(avg_position, ticker_info)
-                    logger.info(f'{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}, expected_profit: {expected_profit}')
-                    self.handle_sell_order(ticker_pair, float(avg_position["amount"]), float(bid_price))
+                elif trade_action == TradeAction.SELL:
+                    logger.info(f'{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
+                    self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
                     break
             
             time.sleep(self.inter_currency_sleep_interval)
@@ -205,29 +220,63 @@ class CryptoBot:
         logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
 
-    def handle_sell_order(self, ticker_pair: str, shares: float, bid_price: float):
+    def handle_sell_order(self, ticker_pair: str, bid_price: float, positions_to_exit):
+        shares: float = 0.0
+        positions_to_delete = []
+        for position in positions_to_exit:
+            shares += position["filled"]
+            positions_to_delete.append[position["id"]]
+
         order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=shares, price=bid_price, order_type="sell")
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute set order")
-            return
+            return None
 
-        proceeds = order['info']['total_value_after_fees']
-        ticker_filter = {
-            'symbol': ticker_pair
-        }
-        current_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
         closed_position = {
             'sell_order': order,
-            'closed_positions': current_positions
+            'closed_positions': positions_to_exit
         }
-
         self.mongodb_service.insert_one(self.closed_positions_collection, closed_position)
-        self.mongodb_service.delete_many(self.current_positions_collection, ticker_filter)
+        delete_filter = {
+            "id": {"$in": {positions_to_delete}}
+        }
+        self.mongodb_service.delete_many(self.current_positions_collection, delete_filter)
 
+        proceeds = order['info']['total_value_after_fees']
         if self.reinvestment_percent > ZERO:
             self.remaining_balance += (Decimal(proceeds) * self.reinvestment_percent)
 
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
+        return closed_position
+
+    def evaluate_profits(self, ticker_pair, avg_position, all_positions, bid_price):
+        if not avg_position:
+            return None
+        
+        positions_to_exit = []
+        if self.take_profit_evaluation_type == TakeProfitEvaluationType.AVERAGE:
+            profit_pct = calculate_profit_percent(avg_position, bid_price)
+
+            if profit_pct >= self.take_profit_threshold:
+                logger.info(f'{ticker_pair}: profits meets threshold, AVERAGE evaluation type')
+                positions_to_exit = all_positions
+
+        elif self.take_profit_evaluation_type == TakeProfitEvaluationType.INDIVIDUAL_LOTS:
+            for position in all_positions:
+                profit_pct = calculate_profit_percent(avg_position, bid_price)
+                if profit_pct >= self.take_profit_threshold:
+                    positions_to_exit.append(position)
+
+        elif self.take_profit_evaluation_type == TakeProfitEvaluationType.OPTIMIZED:
+            logger.warn(f'{ticker_pair}: Take profit evaluation type of OPTIMIZED not supported yet')
+        else:
+            pass        
+
+        if len(positions_to_exit) == 0:
+            return None
+        
+        logger.info(f"{ticker_pair}: Take profits triggered, num of positions selling: {len(positions_to_exit)}")
+        return self.handle_sell_order(ticker_pair, bid_price, positions_to_exit)
 
     def ticker_in_cooldown(self, ticker_pair):
         if ticker_pair not in self.ticker_cooldown_periods:
