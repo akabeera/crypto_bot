@@ -1,5 +1,8 @@
 import json
 
+SOL_TICKER_PAIR = "SOL/USD"
+ATOM_TICKER_PAIR = "ATOM/USD"
+
 ATOM_TICKER_INFO_JSON = """{
     "symbol": "ATOM/USD", 
     "timestamp": 1698926118870,

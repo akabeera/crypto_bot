@@ -2,9 +2,6 @@ import json
 
 SOL_TRADES_JSON = """[
   {
-    "_id": {
-      "$oid": "64cd37f1f9faac73fb4fe307"
-    },
     "info": {
       "order_id": "06256e71-3ee6-496a-aa26-61101f40a76e",
       "product_id": "SOL-USD",
@@ -44,9 +41,7 @@ SOL_TRADES_JSON = """[
     },
     "id": "06256e71-3ee6-496a-aa26-61101f40a76e",
     "clientOrderId": "ae10c573-24d2-4d46-8d58-6feca882a453",
-    "timestamp": {
-      "$numberLong": "1691170800228"
-    },
+    "timestamp": 1691170800228,
     "datetime": "2023-08-04T17:40:00.228226Z",
     "lastTradeTimestamp": null,
     "symbol": "SOL/USD",
@@ -80,9 +75,6 @@ SOL_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "64cd38a5007a878aeb247cda"
-    },
     "info": {
       "order_id": "f03650af-a426-4504-a98f-63d14d3ae1f6",
       "product_id": "SOL-USD",
@@ -122,9 +114,7 @@ SOL_TRADES_JSON = """[
     },
     "id": "f03650af-a426-4504-a98f-63d14d3ae1f6",
     "clientOrderId": "431d3a82-4554-4e70-be71-0c29d494d7dc",
-    "timestamp": {
-      "$numberLong": "1691170980875"
-    },
+    "timestamp": 1691170980875,
     "datetime": "2023-08-04T17:43:00.875434Z",
     "lastTradeTimestamp": null,
     "symbol": "SOL/USD",
@@ -158,9 +148,6 @@ SOL_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "64cd3dcb805ba66a2632db9c"
-    },
     "info": {
       "order_id": "3961a397-bd84-4c21-a3b0-7f7131055246",
       "product_id": "SOL-USD",
@@ -200,9 +187,7 @@ SOL_TRADES_JSON = """[
     },
     "id": "3961a397-bd84-4c21-a3b0-7f7131055246",
     "clientOrderId": "acd55b2f-cf4b-4b48-81bf-80be9028a9a8",
-    "timestamp": {
-      "$numberLong": "1691172298277"
-    },
+    "timestamp": 1691172298277,
     "datetime": "2023-08-04T18:04:58.277204Z",
     "lastTradeTimestamp": null,
     "symbol": "SOL/USD",
@@ -236,9 +221,6 @@ SOL_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "64cd46e60fb645c6ffde0555"
-    },
     "info": {
       "order_id": "aac5b7bf-cdde-42c9-8241-bb38ab646ed2",
       "product_id": "SOL-USD",
@@ -278,9 +260,7 @@ SOL_TRADES_JSON = """[
     },
     "id": "aac5b7bf-cdde-42c9-8241-bb38ab646ed2",
     "clientOrderId": "93ba5ccc-c46c-4bf8-a48e-7373fd148eee",
-    "timestamp": {
-      "$numberLong": "1691174629572"
-    },
+    "timestamp": 1691174629572,
     "datetime": "2023-08-04T18:43:49.572898Z",
     "lastTradeTimestamp": null,
     "symbol": "SOL/USD",
@@ -318,9 +298,6 @@ SOL_TRADES_JSON = """[
 
 ATOM_TRADES_JSON = """[
   {
-    "_id": {
-      "$oid": "652f474a6b0cd2569d93a684"
-    },
     "info": {
       "order_id": "c3309fa2-e4fa-4225-9bae-3c4e511d189b",
       "product_id": "ATOM-USD",
@@ -363,9 +340,7 @@ ATOM_TRADES_JSON = """[
     },
     "id": "c3309fa2-e4fa-4225-9bae-3c4e511d189b",
     "clientOrderId": "b23a522f-af31-4811-9920-c94b35c2555a",
-    "timestamp": {
-      "$numberLong": "1697597258134"
-    },
+    "timestamp": 1697597258134,
     "datetime": "2023-10-18T02:47:38.134498Z",
     "lastTradeTimestamp": null,
     "symbol": "ATOM/USD",
@@ -399,9 +374,6 @@ ATOM_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "652fecb86b0cd2569d93a68b"
-    },
     "info": {
       "order_id": "75257129-3420-4668-8bc7-b8aeafc879b3",
       "product_id": "ATOM-USD",
@@ -444,9 +416,7 @@ ATOM_TRADES_JSON = """[
     },
     "id": "75257129-3420-4668-8bc7-b8aeafc879b3",
     "clientOrderId": "7041edb4-fefe-4d8c-b069-1c9fc85f4598",
-    "timestamp": {
-      "$numberLong": "1697639607133"
-    },
+    "timestamp": 1697639607133,
     "datetime": "2023-10-18T14:33:27.133850Z",
     "lastTradeTimestamp": null,
     "symbol": "ATOM/USD",
@@ -480,9 +450,6 @@ ATOM_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "65302b6a6b0cd2569d93a68c"
-    },
     "info": {
       "order_id": "4d0c06e8-0971-429b-9026-c1b136a22c26",
       "product_id": "ATOM-USD",
@@ -525,9 +492,7 @@ ATOM_TRADES_JSON = """[
     },
     "id": "4d0c06e8-0971-429b-9026-c1b136a22c26",
     "clientOrderId": "d881fb7b-7027-4c45-884e-e358fe7ee84e",
-    "timestamp": {
-      "$numberLong": "1697655657119"
-    },
+    "timestamp": 1697655657119,
     "datetime": "2023-10-18T19:00:57.119365Z",
     "lastTradeTimestamp": null,
     "symbol": "ATOM/USD",
@@ -561,9 +526,6 @@ ATOM_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "653039916b0cd2569d93a68d"
-    },
     "info": {
       "order_id": "827ae681-c568-4989-a3e5-d6b9c33388c5",
       "product_id": "ATOM-USD",
@@ -606,9 +568,7 @@ ATOM_TRADES_JSON = """[
     },
     "id": "827ae681-c568-4989-a3e5-d6b9c33388c5",
     "clientOrderId": "8d6744eb-752d-4c31-af4d-e10b337ee739",
-    "timestamp": {
-      "$numberLong": "1697659279897"
-    },
+    "timestamp": 1697659279897,
     "datetime": "2023-10-18T20:01:19.897251Z",
     "lastTradeTimestamp": null,
     "symbol": "ATOM/USD",
@@ -642,9 +602,6 @@ ATOM_TRADES_JSON = """[
     "stopLossPrice": null
   },
   {
-    "_id": {
-      "$oid": "65308848af7cd453115229f6"
-    },
     "info": {
       "order_id": "1e198760-5c07-453d-9f05-37911371f558",
       "product_id": "ATOM-USD",
@@ -687,9 +644,7 @@ ATOM_TRADES_JSON = """[
     },
     "id": "1e198760-5c07-453d-9f05-37911371f558",
     "clientOrderId": "a9606541-bd9b-4a51-ad82-881c4d554ea5",
-    "timestamp": {
-      "$numberLong": "1697679431388"
-    },
+    "timestamp": 1697679431388,
     "datetime": "2023-10-19T01:37:11.388631Z",
     "lastTradeTimestamp": null,
     "symbol": "ATOM/USD",

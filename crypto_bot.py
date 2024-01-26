@@ -238,7 +238,7 @@ class CryptoBot:
         }
         self.mongodb_service.insert_one(self.closed_positions_collection, closed_position)
         delete_filter = {
-            "id": {"$in": {positions_to_delete}}
+            "id": {"$in": positions_to_delete}
         }
         self.mongodb_service.delete_many(self.current_positions_collection, delete_filter)
 

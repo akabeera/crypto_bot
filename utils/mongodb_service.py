@@ -8,23 +8,26 @@ class MongoDBService:
     _backup_collection = "snapshots"
 
     @classmethod
-    def _get_client(cls, db_url):
+    def _get_client(cls, db_url, client=None):
         if cls._client is None:
-            try:
-                cls._client = MongoClient(db_url)
-                # You might want to add more robust connection handling and setup here
-            except ConnectionFailure as e:
-                print(f"Could not connect to server: {e}")
+            if client is not None:
+                cls._client = client
+            else:
+                try:
+                    cls._client = MongoClient(db_url)
+                    # You might want to add more robust connection handling and setup here
+                except ConnectionFailure as e:
+                    print(f"Could not connect to server: {e}")
         return cls._client
     
-    def __init__(self, db_url, db_name):
+    def __init__(self, db_url, db_name, client=None):
         """
         Initialize the MongoDBService with the specified database URL and database name.
 
         :param db_url: URL for the MongoDB database.
         :param db_name: Name of the database to interact with.
         """
-        self.db_client = self._get_client(db_url)
+        self.db_client = self._get_client(db_url, client=client)
         self.db = self.db_client[db_name]
 
     def query(self, collection, filter_dict=None, projection=None):

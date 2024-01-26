@@ -1,9 +1,6 @@
 import json
 
 ATOM_TRADE_JSON = """{
-    "_id": {
-      "$oid": "64dd3de5815ba66a2632dba0"
-    },
     "info": {
       "order_id": "a6b876b9-af4b-5f3a-88f0-4f129e7ce33e",
       "product_id": "ATOM-USD",
@@ -43,9 +40,7 @@ ATOM_TRADE_JSON = """{
     },
     "id": "b0b876b0-fc4a-4f39-80f0-2f129d7cc33e",
     "clientOrderId": "1836f07a-0275-4c3b-8d0e-261f6a387d05",
-    "timestamp": {
-      "$numberLong": "1691172321234"
-    },
+    "timestamp": 1691172321234,
     "datetime": "2023-08-04T18:05:21.234994Z",
     "lastTradeTimestamp": null,
     "symbol": "ATOM/USD",
