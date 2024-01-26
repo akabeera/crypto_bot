@@ -1,15 +1,15 @@
 {
-    "max_spend": 250,
+    "max_spend": 500,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
-    "cooldown_num_periods": 60,
+    "cooldown_num_periods": 30,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
     "take_profits": {
         "threshold_percent": 2,
-        "evaluation_type": "AVERAGE" 
+        "evaluation_type": "INDIVIDUAL_LOTS" 
     },
     "mongodb":{
         "db_name": "crypto-bot",
@@ -29,7 +29,7 @@
             "priority": 0,
             "enabled": true,
             "parameters": {
-                "threshold_percent": 2
+                "threshold_percent": 2.5
             } 
         },
         {
@@ -53,8 +53,8 @@
             "name": "RSI",
             "priority": 2,
             "parameters": {
-                "overbought_signal_threshold": 75,
-                "oversold_signal_threshold": 20
+                "overbought_signal_threshold": 70,
+                "oversold_signal_threshold": 30
             }
         },
         {
@@ -87,19 +87,6 @@
                     "parameters": {
                         "overbought_signal_threshold": 72,
                         "oversold_signal_threshold": 20
-                    }
-                }
-            ]
-        },
-        {
-            "tickers":["COMP/USD", "WCFG/USD", "FIL/USD", "AMP/USD"],
-            "strategies": [
-                {
-                    "name": "RSI",
-                    "priority": 2,
-                    "parameters": {
-                        "overbought_signal_threshold": 72,
-                        "oversold_signal_threshold": 25
                     }
                 }
             ]

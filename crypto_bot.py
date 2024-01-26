@@ -120,7 +120,6 @@ class CryptoBot:
 
         self.strategies_priorities.sort()
             
-
     def run(self):
         idx = 0
         N = len(self.supported_crypto_list)
@@ -180,7 +179,7 @@ class CryptoBot:
                     if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
                         strategy_to_run = self.strategies_overrides[ticker_pair][curr_strat_name]
                     
-                    strategy_to_run.eval(avg_position, candles_df, ticker_info)    
+                    curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
 
                     if s_idx == 0:
                         trade_action = curr_action
@@ -225,7 +224,7 @@ class CryptoBot:
         positions_to_delete = []
         for position in positions_to_exit:
             shares += position["filled"]
-            positions_to_delete.append[position["id"]]
+            positions_to_delete.append(position["id"])
 
         order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=shares, price=bid_price, order_type="sell")
         if not order:
@@ -240,7 +239,12 @@ class CryptoBot:
         delete_filter = {
             "id": {"$in": positions_to_delete}
         }
-        self.mongodb_service.delete_many(self.current_positions_collection, delete_filter)
+
+        deletion_result = self.mongodb_service.delete_many(self.current_positions_collection, delete_filter)
+        deletion_count = deletion_result.deleted_count
+        logger.info(f"{ticker_pair}: deletion result from trades table: {deletion_count}")
+        if deletion_count != len(positions_to_exit):
+            logger.warn(f"{ticker_pair}: mismatch of deleted positions, deletion count: {deletion_count}, positions exited:{len(positions_to_exit)}")
 
         proceeds = order['info']['total_value_after_fees']
         if self.reinvestment_percent > ZERO:
@@ -263,19 +267,20 @@ class CryptoBot:
 
         elif self.take_profit_evaluation_type == TakeProfitEvaluationType.INDIVIDUAL_LOTS:
             for position in all_positions:
-                profit_pct = calculate_profit_percent(avg_position, bid_price)
+                profit_pct = calculate_profit_percent(position, bid_price)
                 if profit_pct >= self.take_profit_threshold:
+                    logger.info(f'{ticker_pair}: selling individual lot {position["id"]}, profit pct: {profit_pct * 100}%')
                     positions_to_exit.append(position)
 
         elif self.take_profit_evaluation_type == TakeProfitEvaluationType.OPTIMIZED:
-            logger.warn(f'{ticker_pair}: Take profit evaluation type of OPTIMIZED not supported yet')
+            logger.warn(f'{ticker_pair}: take profit evaluation type of OPTIMIZED not supported yet')
         else:
             pass        
 
         if len(positions_to_exit) == 0:
             return None
         
-        logger.info(f"{ticker_pair}: Take profits triggered, num of positions selling: {len(positions_to_exit)}")
+        logger.info(f"{ticker_pair}: take profits triggered, num of positions selling: {len(positions_to_exit)}")
         return self.handle_sell_order(ticker_pair, bid_price, positions_to_exit)
 
     def ticker_in_cooldown(self, ticker_pair):
@@ -283,11 +288,12 @@ class CryptoBot:
             logger.error(f"{ticker_pair} no entry in cooldown, aborting")
             return False
         
-        periods = self.ticker_cooldown_periods[ticker_pair]        
-        if len(periods) < self.cooldown_num_periods +  1:
-            return False
+        periods = self.ticker_cooldown_periods[ticker_pair]
+        num_periods = len(periods)        
+        if num_periods > 0 and num_periods < self.cooldown_num_periods +  1:
+            return True
         
-        return True
+        return False
 
     def handle_cooldown(self, ticker_pair):
         if ticker_pair not in self.ticker_cooldown_periods:
