@@ -291,6 +291,7 @@ class CryptoBot:
         periods = self.ticker_cooldown_periods[ticker_pair]
         num_periods = len(periods)        
         if num_periods > 0 and num_periods < self.cooldown_num_periods +  1:
+            logger.info(f"{ticker_pair}: current cooldown ${len(periods)} of {self.cooldown_num_periods}")
             return True
         
         return False
