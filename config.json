@@ -25,14 +25,6 @@
     },
     "strategies": [
         {
-            "name": "TAKE_PROFIT",
-            "priority": 0,
-            "enabled": true,
-            "parameters": {
-                "threshold_percent": 2.5
-            } 
-        },
-        {
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
