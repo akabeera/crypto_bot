@@ -8,7 +8,7 @@
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
     "take_profits": {
-        "threshold_percent": 2,
+        "threshold_percent": 2.5,
         "evaluation_type": "INDIVIDUAL_LOTS" 
     },
     "mongodb":{
