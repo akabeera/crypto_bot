@@ -1,9 +1,13 @@
 from decimal import *
 
+MAX_PRECISION = 8
+
+
 ZERO = Decimal(0)
 ONE = Decimal(1)
 FIVE = Decimal(5)
 ONE_HUNDRED = Decimal(100)
+QUANTIZING_DECIMAL = ONE.scaleb(-MAX_PRECISION)
 
 DEFAULT_MONGO_DB_NAME = "crypto-bot"
 DEFAULT_MONGO_SELL_ORDERS_COLLECTION = "sell_orders" 

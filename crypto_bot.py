@@ -6,7 +6,7 @@ from decimal import *
 from dotenv import load_dotenv
 
 from strategies.strategy_factory import strategy_factory
-from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position
+from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 from utils.constants import ZERO, DEFAULT_TAKE_PROFIT_THRESHOLD, DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
@@ -189,11 +189,11 @@ class CryptoBot:
                             break
 
                 if trade_action == TradeAction.BUY:
-                    logger.info(f"{ticker_pair}: executing BUY @ ask price: ${ask_price}")
+                    logger.info(f"{ticker_pair}: BUY signal triggered @ ask price: ${ask_price}")
                     self.handle_buy_order(ticker_pair)
                     break
                 elif trade_action == TradeAction.SELL:
-                    logger.info(f'{ticker_pair}: executing SELL @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
+                    logger.info(f'{ticker_pair}: SELL signal triggered @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
                     self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
                     break
             
@@ -226,9 +226,11 @@ class CryptoBot:
             shares += position["filled"]
             positions_to_delete.append(position["id"])
 
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=shares, price=bid_price, order_type="sell")
+        rounded_shares = round_down(shares)
+
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=rounded_shares, price=bid_price, order_type="sell")
         if not order:
-            logger.error(f"{ticker_pair}: FAILED to execute set order")
+            logger.error(f"{ticker_pair}: FAILED to execute sell order")
             return None
 
         closed_position = {
