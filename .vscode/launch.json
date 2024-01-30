@@ -57,5 +57,14 @@
             "args": ["--ticker=FIL/USD", "--op=add_sell_order", "--orders=aa6ed897-f8a7-44b1-937f-37ae36329a31"],
             "justMyCode": false
         },
+        {
+            "name": "Populate OHLCV",
+            "type": "python",
+            "request": "launch",
+            "module": "admin.main",
+            "console": "integratedTerminal",
+            "args": ["--op=populate_ohlcv"],
+            "justMyCode": false
+        },
     ]
 }

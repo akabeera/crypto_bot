@@ -1,13 +1,19 @@
 import os
 import argparse
 import pprint
-from decimal import *
+import time
+import pytz
 
+from decimal import *
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from utils.exchange_service import ExchangeService
 from utils.mongodb_service import MongoDBService
 from utils.reconciliation import ReconciliationActions, reconcile_with_exchange, apply_reconciliation_to_db
-from utils.constants import DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, DEFAULT_MONGO_SNAPSHOTS_COLLECTION, FIVE
+from utils.constants import DEFAULT_MONGO_OHLCV_DATA_META_FIELD, DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD, DEFAULT_MONGO_OHLCV_DATA_GRANULARITY, DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, DEFAULT_MONGO_OHLCV_DATA_COLLECTION, DEFAULT_MONGO_SNAPSHOTS_COLLECTION, FIVE
+
+
 
 load_dotenv()
 
@@ -156,16 +162,89 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
     print(f"{ticker_pair} tickers applied recon: {','.join(tickers_applied_recon)}")
     print(f"{ticker_pair} total value of applied recon actions {total_recon_value}")
 
+def populate_marketdata(ticker_pairs = [], timeframe="1m", since = ""):
+    if len(ticker_pairs) == 0:
+        ticker_pairs = [
+            "LPT/USD",
+            "WCFG/USD",
+            "BNT/USD",
+            "ATOM/USD",
+            "SOL/USD",
+            "MANA/USD",
+            "OXT/USD",
+            "SNX/USD",
+            "AVAX/USD",
+            "DOGE/USD",
+            "ICP/USD",
+            "FIL/USD",
+            "ASM/USD",
+            "MATIC/USD",
+            "DOT/USD",
+            "AMP/USD",
+            "SHIB/USD",
+            "COMP/USD",
+            "ATOM/USD",
+            "IOTX/USD",
+            "BTC/USD"
+        ]
+
+    collections_list = mongodb_service.get_collections_names()
+    if DEFAULT_MONGO_OHLCV_DATA_COLLECTION not in collections_list:
+        indexes = [
+            [("timestamp", 1)],
+            [(DEFAULT_MONGO_OHLCV_DATA_META_FIELD, 1)]
+        ]
+        mongodb_service.create_collection(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, {
+            "timeField": DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
+            "granularity": DEFAULT_MONGO_OHLCV_DATA_GRANULARITY,
+            "metaField": DEFAULT_MONGO_OHLCV_DATA_META_FIELD
+        }, 
+        indexes)    
+    
+    for ticker_pair in ticker_pairs:
+        ohlcv_data = []
+
+        most_recent_doc = mongodb_service.query(collection=DEFAULT_MONGO_OHLCV_DATA_COLLECTION, 
+                                            filter_dict={"ticker": ticker_pair}, 
+                                            sort_field=DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
+                                            limit = 1)
+        if len(most_recent_doc) > 0:
+            most_recent_timestamp = most_recent_doc[0][DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD]
+            aware_datetime = most_recent_timestamp.replace(tzinfo=ZoneInfo('UTC'))
+
+            #wrapping in a Decimal first because timestamp() returns a .0 decimal even after casting to int()
+            epoch_timestamp = int(Decimal((aware_datetime.timestamp()*1000)))
+            ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV", params={"since": epoch_timestamp})
+        else:
+            ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV")
+
+        for candle in ohlcv:
+            timestamp = datetime.fromtimestamp(candle[0]/1000, timezone.utc)
+
+            entry = {
+                "timestamp": timestamp,
+                "open": candle[1],
+                "high": candle[2],
+                "low": candle[3],
+                "close": candle[4],
+                "volume": candle[5],
+                DEFAULT_MONGO_OHLCV_DATA_META_FIELD: ticker_pair
+            }
+
+            ohlcv_data.append(entry)
+        mongodb_service.insert_many(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, ohlcv_data)
+        time.sleep(1)
+
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--op", help="the operation you want to perform")
-    parser.add_argument("--orders", help="comma separated list of order numbers")
-    parser.add_argument("--ticker_pairs", help="ticker pairs list")
-    parser.add_argument("--dry_run", help="dry run", default="True", type=str)
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("--op", help="the operation you want to perform")
+    argparser.add_argument("--orders", help="comma separated list of order numbers")
+    argparser.add_argument("--ticker_pairs", help="ticker pairs list")
+    argparser.add_argument("--dry_run", help="dry run", default="True", type=str)
 
-    args = parser.parse_args()
+    args = argparser.parse_args()
 
     if args.op:
         if args.op == "add_buy_order":
@@ -178,6 +257,8 @@ if __name__ == "__main__":
             dry_run = args.dry_run == "True"
             ticker_pairs = args.ticker_pairs.split(",")
             reconcile_db_with_exchange(ticker_pairs, dry_run)
+        if args.op == "populate_ohlcv":
+            populate_marketdata()
     else:
         print("no op argument")
 
