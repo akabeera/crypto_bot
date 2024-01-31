@@ -1,7 +1,6 @@
 from decimal import *
 
-MAX_PRECISION = 8
-
+MAX_PRECISION = 12
 
 ZERO = Decimal(0)
 ONE = Decimal(1)
