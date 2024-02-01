@@ -6,8 +6,13 @@ from utils.trading import TradeAction
 class BaseStrategy:
     def __init__(self, config):
         self.name = config["name"]
-        pass
-
+        self.prevent_loss = True
+        if "prevent_loss" in config:
+            self.prevent_loss = config["prevent_loss"]
+        self.enabled = True
+        if "enabled" in config:
+            self.enabled = config["enabled"]
+        
     def eval(self, avg_position, candles_df, ticker_info) -> TradeAction:
         pass
 
@@ -15,7 +20,7 @@ class BaseStrategy:
         if avg_position is None:
             return TradeAction.NOOP
         
-        profit_pct = calculate_profit_percent(avg_position, ticker_info)
+        profit_pct = calculate_profit_percent(avg_position, ticker_info["bid"])
         if profit_pct < Decimal(.005):
             logger.debug(f'{ticker_info["symbol"]}: {self.name} prevent_loss forced HOLD signal, profit: {profit_pct}')
             curr_action = TradeAction.HOLD

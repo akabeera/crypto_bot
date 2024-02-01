@@ -1,0 +1,2 @@
+-r requirements.txt  # Include all production dependencies
+mongomock==3.22.0

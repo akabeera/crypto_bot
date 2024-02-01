@@ -1,9 +1,11 @@
-from .base_strategy import BaseStrategy
-from .take_profit import TakeProfit
-from .avg_down import AverageDown
-from .bollinger_bands import BollingerBands
-from .rsi import RSI
-from .macd import MACD
+from strategies.base_strategy import BaseStrategy
+from strategies.take_profit import TakeProfit
+from strategies.avg_down import AverageDown
+from strategies.bollinger_bands import BollingerBands
+from strategies.rsi import RSI
+from strategies.adaptive_rsi import AdaptiveRSI
+from strategies.macd import MACD
+
 
 def strategy_factory(strategy_json) -> BaseStrategy:
     strategy_name = strategy_json["name"]
@@ -16,6 +18,8 @@ def strategy_factory(strategy_json) -> BaseStrategy:
             return BollingerBands(strategy_json)
         case "RSI":
             return RSI(strategy_json)
+        case "ADAPTIVE_RSI":
+            return AdaptiveRSI(strategy_json)
         case "MACD":
             return MACD(strategy_json)
         case _:

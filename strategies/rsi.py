@@ -26,12 +26,16 @@ class RSI(BaseStrategy):
         last_row = candles_df.iloc[-1]
         rsi = last_row[rsi_key]
 
+        ticker = ticker_info["symbol"]
+
+        #logger.info(f"{ticker}: REGULAR RSI: {rsi}")
+
         action = TradeAction.NOOP
         if rsi > self.overbought_signal_threshold:
-            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered SELL signal')
+            logger.debug(f'{ticker}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
         elif rsi < self.oversold_signal_threshold:
-            logger.debug(f'{ticker_info["symbol"]}: {self.name} triggered BUY signal, RSI: {rsi}')
+            logger.debug(f'{ticker}: {self.name} triggered BUY signal, RSI: {rsi}')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:

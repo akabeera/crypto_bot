@@ -1,6 +1,5 @@
 import ccxt
 import os
-import json
 import time
 from dotenv import load_dotenv
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
@@ -48,7 +47,7 @@ class ExchangeService:
             self.limit_order_time_limit = exchange_config["limit_order_time_limit"]
 
 
-    def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, total_cost = None, order_type:str = None, order_id: str = None):
+    def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, total_cost = None, order_type:str = None, order_id: str = None, params = {}):
         try:
             if not self.exchange_client.has[op]:
                 logger.warn(f"{ticker_pair}: exchange does not support op: {op}")
@@ -59,7 +58,14 @@ class ExchangeService:
             elif op == "fetchOHLCV":
                 return self.exchange_client.fetch_ohlcv(ticker_pair)
             elif op == "fetchOrder":
-                order = self.exchange_client.fetch_order(order_id)
+                timeframe = "1m"
+                if "timeframe" in params:
+                    timeframe = params["timeframe"]
+                if "since" in params:
+                    since = params["since"]
+                    order = self.exchange_client.fetch_order(order_id, timeframe, since)
+                else:
+                    order = self.exchange_client.fetch_order(order_id, timeframe)
                 return order
             elif op == "fetchOrders":
                 return self.exchange_client.fetch_orders(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 500)
@@ -76,8 +82,7 @@ class ExchangeService:
                     return self.create_order(ticker_pair, shares, market_order_type, order_type, price)
          
             elif op == "cancelOrder":
-                 self.exchange_client.cancel_order(order_id, ticker_pair)
-                 return None
+                 return self.exchange_client.cancel_order(order_id, ticker_pair)
             elif op == "fetchMyTrades":
                 return self.exchange_client.fetch_my_trades(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
             elif op == "fetchTransactions":

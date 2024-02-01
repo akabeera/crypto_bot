@@ -13,10 +13,13 @@ class TakeProfit(BaseStrategy):
         super().__init__(config)
 
     def eval(self, avg_position, candles_df, ticker_info):
+        if not self.enabled:
+            return TradeAction.NOOP
+        
         if avg_position == None:
             return TradeAction.NOOP
         
-        profit = calculate_profit_percent(avg_position, ticker_info)
+        profit = calculate_profit_percent(avg_position, ticker_info["bid"])
 
         if profit >= self.threshold_percent:
             logger.debug(f'{avg_position["symbol"]}: {self.name} triggered SELL signal, expected profit: ${profit}')

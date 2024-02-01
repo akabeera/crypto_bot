@@ -1,12 +1,16 @@
 {
-    "max_spend": 250,
+    "max_spend": 500,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
-    "sleep_interval": 10,
+    "sleep_interval": 1,
     "cooldown_num_periods": 30,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
+    "take_profits": {
+        "threshold_percent": 2.5,
+        "evaluation_type": "INDIVIDUAL_LOTS" 
+    },
     "mongodb":{
         "db_name": "crypto-bot",
         "current_positions_collection": "trades",
@@ -21,17 +25,10 @@
     },
     "strategies": [
         {
-            "name": "TAKE_PROFIT",
-            "priority": 0,
-            "parameters": {
-                "threshold_percent": 2
-            } 
-        },
-        {
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 15,
+                "threshold_percent": 20,
                 "num_times": 2
             } 
         },
@@ -48,8 +45,22 @@
             "name": "RSI",
             "priority": 2,
             "parameters": {
-                "overbought_signal_threshold": 75,
-                "oversold_signal_threshold": 20
+                "overbought_signal_threshold": 70,
+                "oversold_signal_threshold": 30
+            }
+        },
+        {
+            "name": "ADAPTIVE_RSI",
+            "priority": 2,
+            "enabled": false,
+            "parameters": {
+                "default_upper_threshold": 70,
+                "default_lower_threshold": 30,
+                "volatility_factor": 1000,
+                "rsi_period": 14,
+                "normalization_factor": 100000,
+                "trend_ma_period": 50,
+                "trend_factor": 500
             }
         },
         {
@@ -73,26 +84,13 @@
             ]
         },
         {
-            "tickers":["COMP/USD", "WCFG/USD", "FIL/USD", "AMP/USD"],
-            "strategies": [
-                {
-                    "name": "RSI",
-                    "priority": 2,
-                    "parameters": {
-                        "overbought_signal_threshold": 72,
-                        "oversold_signal_threshold": 25
-                    }
-                }
-            ]
-        },
-        {
             "tickers":["WCFG/USD", "OXT/USD", "SNX/USD"],
             "strategies": [
                 {
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 20
+                        "threshold_percent": 25
                     }
                 }
             ]

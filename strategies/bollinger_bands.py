@@ -19,6 +19,9 @@ class BollingerBands(BaseStrategy):
 
 
     def eval(self, avg_position, candles_df, ticker_info):
+        if not self.enabled:
+            return TradeAction.NOOP
+        
         middle_band_key = "middle_band"
         upper_band_key = "upper_band"
         lower_band_key = "lower_band"
