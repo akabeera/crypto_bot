@@ -162,7 +162,8 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
     print(f"{ticker_pair} tickers applied recon: {','.join(tickers_applied_recon)}")
     print(f"{ticker_pair} total value of applied recon actions {total_recon_value}")
 
-def populate_marketdata(ticker_pairs = [], timeframe="1m", since = ""):
+def populate_ohlcv_data(ticker_pairs = [], timeframe="1m", since = ""):
+
     if len(ticker_pairs) == 0:
         ticker_pairs = [
             "LPT/USD",
@@ -183,13 +184,14 @@ def populate_marketdata(ticker_pairs = [], timeframe="1m", since = ""):
             "AMP/USD",
             "SHIB/USD",
             "COMP/USD",
-            "ATOM/USD",
             "IOTX/USD",
             "BTC/USD"
         ]
 
     collections_list = mongodb_service.get_collections_names()
     if DEFAULT_MONGO_OHLCV_DATA_COLLECTION not in collections_list:
+        print(f"creating ohlcv_data collection")
+
         indexes = [
             [("timestamp", 1)],
             [(DEFAULT_MONGO_OHLCV_DATA_META_FIELD, 1)]
@@ -200,40 +202,56 @@ def populate_marketdata(ticker_pairs = [], timeframe="1m", since = ""):
             "metaField": DEFAULT_MONGO_OHLCV_DATA_META_FIELD
         }, 
         indexes)    
-    
-    for ticker_pair in ticker_pairs:
-        ohlcv_data = []
 
-        most_recent_doc = mongodb_service.query(collection=DEFAULT_MONGO_OHLCV_DATA_COLLECTION, 
-                                            filter_dict={"ticker": ticker_pair}, 
-                                            sort_field=DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
-                                            limit = 1)
-        if len(most_recent_doc) > 0:
-            most_recent_timestamp = most_recent_doc[0][DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD]
-            aware_datetime = most_recent_timestamp.replace(tzinfo=ZoneInfo('UTC'))
 
-            #wrapping in a Decimal first because timestamp() returns a .0 decimal even after casting to int()
-            epoch_timestamp = int(Decimal((aware_datetime.timestamp()*1000)))
-            ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV", params={"since": epoch_timestamp})
-        else:
-            ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV")
+    while True:
+        for ticker_pair in ticker_pairs:
+            ohlcv_data = []
 
-        for candle in ohlcv:
-            timestamp = datetime.fromtimestamp(candle[0]/1000, timezone.utc)
+            most_recent_doc = mongodb_service.query(collection=DEFAULT_MONGO_OHLCV_DATA_COLLECTION, 
+                                                filter_dict={"ticker": ticker_pair}, 
+                                                sort_field=DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
+                                                limit = 1)
+            if len(most_recent_doc) > 0:
+                most_recent_timestamp = most_recent_doc[0][DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD]
+                aware_datetime = most_recent_timestamp.replace(tzinfo=ZoneInfo('UTC'))
 
-            entry = {
-                "timestamp": timestamp,
-                "open": candle[1],
-                "high": candle[2],
-                "low": candle[3],
-                "close": candle[4],
-                "volume": candle[5],
-                DEFAULT_MONGO_OHLCV_DATA_META_FIELD: ticker_pair
-            }
+                #wrapping in a Decimal first because timestamp() returns a .0 decimal even after casting to int()
+                epoch_timestamp = int(Decimal((aware_datetime.timestamp()*1000)))
+                ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV", params={"since": epoch_timestamp})
+            else:
+                ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV")
 
-            ohlcv_data.append(entry)
-        mongodb_service.insert_many(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, ohlcv_data)
-        time.sleep(1)
+            if ohlcv is None:
+                print(f"{ticker_pair}: error fetching ohlcv, skipping")
+                continue
+
+            for candle in ohlcv:
+                timestamp = datetime.fromtimestamp(candle[0]/1000, timezone.utc)
+                candle_entries = mongodb_service.query(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, {"ticker": ticker_pair, "timestamp": timestamp})
+                if len(candle_entries) > 0:
+                    continue
+
+                entry = {
+                    "timestamp": timestamp,
+                    "open": candle[1],
+                    "high": candle[2],
+                    "low": candle[3],
+                    "close": candle[4],
+                    "volume": candle[5],
+                    DEFAULT_MONGO_OHLCV_DATA_META_FIELD: ticker_pair
+                }
+
+                ohlcv_data.append(entry)
+
+            print(f"{ticker_pair}: inserting {len(ohlcv_data)} records")
+            if len(ohlcv_data) > 0:
+                mongodb_service.insert_many(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, ohlcv_data)
+
+            time.sleep(1)
+
+        print(f"{ticker_pair}: sleeping for 200 seconds")
+        time.sleep(200)
 
 
 if __name__ == "__main__":
@@ -258,7 +276,7 @@ if __name__ == "__main__":
             ticker_pairs = args.ticker_pairs.split(",")
             reconcile_db_with_exchange(ticker_pairs, dry_run)
         if args.op == "populate_ohlcv":
-            populate_marketdata()
+            populate_ohlcv_data()
     else:
         print("no op argument")
 
