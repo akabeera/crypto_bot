@@ -1,0 +1,29 @@
+{
+    "strategies_overrides": [
+        {
+            "tickers":["SHIB/USD"],
+            "strategies": [
+                {
+                    "name": "RSI",
+                    "priority": 2,
+                    "parameters": {
+                        "overbought_signal_threshold": 72,
+                        "oversold_signal_threshold": 20
+                    }
+                }
+            ]
+        },
+        {
+            "tickers":["WCFG/USD", "OXT/USD"],
+            "strategies": [
+                {
+                    "name": "AVERAGE_DOWN",
+                    "priority": 2,
+                    "parameters": {
+                        "threshold_percent": 25
+                    }
+                }
+            ]
+        }
+    ]
+}

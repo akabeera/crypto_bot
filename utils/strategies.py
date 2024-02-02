@@ -1,6 +1,4 @@
 import pandas as pd
-import json
-
 
 from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position, round_down
 from strategies.base_strategy import BaseStrategy
@@ -8,24 +6,28 @@ from strategies.strategy_factory import strategy_factory
 
 from utils.logger import logger
 
+def init_strategies(config):
 
-def init_strategies(strategies_json_config):
+    strategies: dict[int, BaseStrategy] = dict()
+    if "strategies" not in config:
+        logger.warning("missing strategies config, returning empty strategies")
+        return strategies
 
-    strategies: dict[str, BaseStrategy] = dict()
+    strategies_config = config["strategies"]
     
-    for strategy_json_config in strategies_json_config:
-        strategy_priority = strategy_json_config["priority"]
+    for strategy_config in strategies_config:
+        strategy_priority = strategy_config["priority"]
         strategy_enabled = True
-        if "enabled" in strategy_json_config:
-            strategy_enabled = strategy_json_config["enabled"]
+        if "enabled" in strategy_config:
+            strategy_enabled = strategy_config["enabled"]
 
         if not strategy_enabled:
             continue
 
-        strategy_object = strategy_factory(strategy_json_config)
+        strategy_object = strategy_factory(strategy_config)
 
         if strategy_object is None:
-            logger.warn(f"Encountered unsupported strategy config: {strategy_json_config}")
+            logger.warn(f"Encountered unsupported strategy config: {strategy_config}")
             continue
 
         if strategy_priority in strategies:
@@ -37,21 +39,25 @@ def init_strategies(strategies_json_config):
     return strategies
 
 
-def init_strategies_overrides(strategies_overrides_json_config):
-    strategies_overrides: dict[str, dict[str, BaseStrategy]] = dict()
+def init_strategies_overrides(config):
 
-    for so in strategies_overrides_json_config:
+    strategies_overrides: dict[str, dict[str, BaseStrategy]] = dict()
+    if "strategies_overrides" not in config:
+        return strategies_overrides
+    
+    strategies_overrides_config = config["strategies_overrides"]
+
+    for so in strategies_overrides_config:
         tickers = so["tickers"]
 
         for ticker in tickers:
             if ticker not in strategies_overrides:
-                    strategies_overrides[ticker] = {}
+                    strategies_overrides[ticker] = dict()
             
             for s in so["strategies"]:
                 strat_name = s["name"]
                 strat_object =  strategy_factory(s)
-                # if strat_name not in strategies_overrides[ticker]:
-                #     strategies_overrides[ticker][strat_name] = {}
+
                 logger.info(f"{ticker}: setting strategy override for strategy: {strat_name}")
                 strategies_overrides[ticker][strat_name] = strat_object
 

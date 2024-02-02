@@ -71,18 +71,11 @@ class CryptoBot:
         self.take_profit_threshold = Decimal(take_profit_threshold/100)
         self.take_profit_evaluation_type = TakeProfitEvaluationType[take_profit_evaluation_type]
 
-        self.init_strategies()
+        self.init()
 
-    def init_strategies(self):
-        self.strategies: dict[str, BaseStrategy] = dict()
-        if "strategies" in self.config:
-            strategies_json = self.config["strategies"]
-            self.strategies = init_strategies(strategies_json)
-
-        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = dict()
-        if "strategies_overrides" in self.config:
-            strategies_overrides_json_config = self.config["strategies_overrides"]
-            self.strategies_overrides = init_strategies_overrides(strategies_overrides_json_config)
+    def init(self):
+        self.strategies: dict[str, BaseStrategy] = init_strategies(self.config)
+        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config)
                         
     def run(self):
         idx = 0
@@ -109,7 +102,7 @@ class CryptoBot:
 
             r, c = candles_df.shape
             if r < 4:
-                logger.warn(f"{ticker_pair}: not enough candles({r}), skipping")
+                logger.warning(f"{ticker_pair}: not enough candles({r}), skipping")
                 continue
 
             ticker_filter = {
