@@ -68,6 +68,10 @@ class CryptoBot:
             take_profit_threshold = take_profits_config["threshold_percent"]
             take_profit_evaluation_type = take_profits_config["evaluation_type"]
 
+        self.dry_run = False
+        if "dry_run" in self.config:
+            self.dry_run = self.config["dry_run"]
+
         self.take_profit_threshold = Decimal(take_profit_threshold/100)
         self.take_profit_evaluation_type = TakeProfitEvaluationType[take_profit_evaluation_type]
 
@@ -112,56 +116,56 @@ class CryptoBot:
             avg_position = calculate_avg_position(all_positions) 
 
             ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
-            if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
-                logger.error(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
+            if ticker_info is None:
+                logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
 
-            ask_price = ticker_info['ask']
-            bid_price = ticker_info['bid']
-
-            profits_results = self.evaluate_profits(ticker_pair, avg_position, all_positions, bid_price)
+            profits_results = self.evaluate_profits(ticker_pair, avg_position, all_positions, ticker_info)
             if profits_results is not None:
                 logger.info(f"{ticker_pair}: took profits and exited positions, skipping strategy evaluation")
                 continue
 
             self.handle_cooldown(ticker_pair)
-            # for priority, strategies in self.strategies.items():
-            #     trade_action = TradeAction.NOOP
-            #     for s_idx, strategy in enumerate(strategies):
-            #         curr_strat_name = strategy.name
-            #         curr_action = TradeAction.NOOP
-            #         strategy_to_run = strategy
-            #         if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
-            #             strategy_to_run = self.strategies_overrides[ticker_pair][curr_strat_name]
-                    
-            #         curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
-
-            #         if s_idx == 0:
-            #             trade_action = curr_action
-            #         else:
-            #             if trade_action != curr_action:
-            #                 trade_action = TradeAction.NOOP
-            #                 break
             trade_action = execute_strategies(ticker_pair, 
                                               self.strategies, 
                                               avg_position, 
                                               ticker_info, 
                                               candles_df, 
                                               self.strategies_overrides)
-
-            if trade_action == TradeAction.BUY:
-                logger.info(f"{ticker_pair}: BUY signal triggered @ ask price: ${ask_price}")
-                self.handle_buy_order(ticker_pair)
-                break
-            elif trade_action == TradeAction.SELL:
-                logger.info(f'{ticker_pair}: SELL signal triggered @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
-                self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
-                break
             
+            self.execute_trade_action(ticker_pair, 
+                                      trade_action, 
+                                      ticker_info, 
+                                      all_positions)    
+                    
             time.sleep(self.inter_currency_sleep_interval)
 
-    
+    def execute_trade_action(self, 
+                             ticker_pair: str, 
+                             trade_action: TradeAction, 
+                             ticker_info,
+                             all_positions):
+        
+        if trade_action == TradeAction.BUY:
+            if "ask" not in ticker_info:
+                logger.error(f"{ticker_pair}: missing ask price in ticker_info, aborting execute_trade_action")
+                return None
+            ask_price = ticker_info["ask"]
+            logger.info(f"{ticker_pair}: BUY signal triggered @ ask price: ${ask_price}")
+            self.handle_buy_order(ticker_pair)    
+        elif trade_action == TradeAction.SELL:
+            if "bid" not in ticker_info:
+                logger.error(f"{ticker_info}: missing bid price in ticker_info, aborting execute_trade_action")
+                return None
+            bid_price = ticker_info["bid"]
+            logger.info(f'{ticker_pair}: SELL signal triggered @ bid price: ${bid_price}, number of lots: {len(all_positions)}')
+            self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
+        
     def handle_buy_order(self, ticker_pair: str):
+        if self.dry_run:
+            logger.info(f"{ticker_pair}: dry_run enabled, skipping buy order execution")
+            return 
+        
         if self.ticker_in_cooldown(ticker_pair):
             logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
             return
@@ -182,6 +186,10 @@ class CryptoBot:
 
 
     def handle_sell_order(self, ticker_pair: str, bid_price: float, positions_to_exit):
+        if self.dry_run:
+            logger.info(f"{ticker_pair}: dry_run enabled, skipping sell order execution")
+            return
+                    
         shares: float = 0.0
         positions_to_delete = []
         for position in positions_to_exit:
@@ -217,10 +225,16 @@ class CryptoBot:
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
         return closed_position
 
-    def evaluate_profits(self, ticker_pair, avg_position, all_positions, bid_price):
+    def evaluate_profits(self, ticker_pair, avg_position, all_positions, ticker_info):
         if not avg_position:
             return None
         
+        if "bid" not in ticker_info:
+            logger.error(f"{ticker_pair}: missing bid_price, aborting evaluate_profit")
+            return None
+        
+        bid_price = ticker_info["bid"]
+
         positions_to_exit = []
         if self.take_profit_evaluation_type == TakeProfitEvaluationType.AVERAGE:
             profit_pct = calculate_profit_percent(avg_position, bid_price)

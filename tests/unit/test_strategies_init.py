@@ -64,7 +64,6 @@ class TestStrategiesInit(unittest.TestCase):
 
         strategies_overrides = init_strategies_overrides(config)
         assert(len(strategies_overrides), 0)
-
         
     def test_valid_config_with_valid_overrides(self):
         CONFIG_FILE = "./tests/fixtures/configs/strategies_overrides_valid.json"
