@@ -5,11 +5,13 @@ import pandas as pd
 from decimal import *
 from dotenv import load_dotenv
 
+from strategies.base_strategy import BaseStrategy
 from strategies.strategy_factory import strategy_factory
 from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 from utils.constants import ZERO, DEFAULT_TAKE_PROFIT_THRESHOLD, DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
+from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
 from utils.logger import logger
 
 load_dotenv()
@@ -72,54 +74,16 @@ class CryptoBot:
         self.init_strategies()
 
     def init_strategies(self):
-        strategies_json = self.config["strategies"]
+        self.strategies: dict[str, BaseStrategy] = dict()
+        if "strategies" in self.config:
+            strategies_json = self.config["strategies"]
+            self.strategies = init_strategies(strategies_json)
 
-        self.strategies = {}
-        self.strategies_priorities = []
-        self.strategies_overrides = {}
-        
-        for strategy_json in strategies_json:
-            strategy_priority = strategy_json["priority"]
-            strategy_enabled = True
-            if "enabled" in strategy_json:
-                strategy_enabled = strategy_json["enabled"]
-
-            if not strategy_enabled:
-                continue
-
-            strategy_object = strategy_factory(strategy_json)
-
-            if strategy_object is None:
-                logger.warn(f"Encountered unsupported strategy config: {strategy_json}")
-                continue
-
-            if strategy_priority in self.strategies:
-                self.strategies[strategy_priority].append(strategy_object)
-            else:
-                self.strategies[strategy_priority] = [strategy_object]
-
-            if strategy_priority not in self.strategies_priorities:
-                self.strategies_priorities.append(strategy_priority)
-        
-        #overrides does NOT override priorities of the base strategy
+        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = dict()
         if "strategies_overrides" in self.config:
-            sos = self.config["strategies_overrides"]
-            for so in sos:
-                tickers = so["tickers"]
-
-                for ticker in tickers:
-                    if ticker not in self.strategies_overrides:
-                            self.strategies_overrides[ticker] = {}
-                    
-                    for s in so["strategies"]:
-                        strat_name = s["name"]
-                        strat_object =  strategy_factory(s)
-                        # if strat_name not in strategies_overrides[ticker]:
-                        #     strategies_overrides[ticker][strat_name] = {}
-                        self.strategies_overrides[ticker][strat_name] = strat_object
-
-        self.strategies_priorities.sort()
-            
+            strategies_overrides_json_config = self.config["strategies_overrides"]
+            self.strategies_overrides = init_strategies_overrides(strategies_overrides_json_config)
+                        
     def run(self):
         idx = 0
         N = len(self.supported_crypto_list)
@@ -168,36 +132,41 @@ class CryptoBot:
                 continue
 
             self.handle_cooldown(ticker_pair)
-            for priority in self.strategies_priorities:
-                current_strategies = self.strategies[priority]
-
-                trade_action = TradeAction.NOOP
-                for s_idx, strategy in enumerate(current_strategies):
-                    curr_strat_name = strategy.name
-                    curr_action = TradeAction.NOOP
-                    strategy_to_run = strategy
-                    if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
-                        strategy_to_run = self.strategies_overrides[ticker_pair][curr_strat_name]
+            # for priority, strategies in self.strategies.items():
+            #     trade_action = TradeAction.NOOP
+            #     for s_idx, strategy in enumerate(strategies):
+            #         curr_strat_name = strategy.name
+            #         curr_action = TradeAction.NOOP
+            #         strategy_to_run = strategy
+            #         if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
+            #             strategy_to_run = self.strategies_overrides[ticker_pair][curr_strat_name]
                     
-                    curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
+            #         curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
 
-                    if s_idx == 0:
-                        trade_action = curr_action
-                    else:
-                        if trade_action != curr_action:
-                            trade_action = TradeAction.NOOP
-                            break
+            #         if s_idx == 0:
+            #             trade_action = curr_action
+            #         else:
+            #             if trade_action != curr_action:
+            #                 trade_action = TradeAction.NOOP
+            #                 break
+            trade_action = execute_strategies(ticker_pair, 
+                                              self.strategies, 
+                                              avg_position, 
+                                              ticker_info, 
+                                              candles_df, 
+                                              self.strategies_overrides)
 
-                if trade_action == TradeAction.BUY:
-                    logger.info(f"{ticker_pair}: BUY signal triggered @ ask price: ${ask_price}")
-                    self.handle_buy_order(ticker_pair)
-                    break
-                elif trade_action == TradeAction.SELL:
-                    logger.info(f'{ticker_pair}: SELL signal triggered @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
-                    self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
-                    break
+            if trade_action == TradeAction.BUY:
+                logger.info(f"{ticker_pair}: BUY signal triggered @ ask price: ${ask_price}")
+                self.handle_buy_order(ticker_pair)
+                break
+            elif trade_action == TradeAction.SELL:
+                logger.info(f'{ticker_pair}: SELL signal triggered @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
+                self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
+                break
             
             time.sleep(self.inter_currency_sleep_interval)
+
     
     def handle_buy_order(self, ticker_pair: str):
         if self.ticker_in_cooldown(ticker_pair):

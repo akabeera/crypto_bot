@@ -25,14 +25,6 @@
     },
     "strategies": [
         {
-            "name": "AVERAGE_DOWN",
-            "priority": 1,
-            "parameters": {
-                "threshold_percent": 20,
-                "num_times": 2
-            } 
-        },
-        {
             "name": "BOLLINGER_BANDS",
             "priority": 2,
             "parameters": {
@@ -62,6 +54,14 @@
                 "trend_ma_period": 50,
                 "trend_factor": 500
             }
+        },
+        {
+            "name": "AVERAGE_DOWN",
+            "priority": 1,
+            "parameters": {
+                "threshold_percent": 20,
+                "num_times": 2
+            } 
         },
         {
             "name": "MACD",
