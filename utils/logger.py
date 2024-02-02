@@ -4,10 +4,8 @@ import logging.config
 
 logger = logging.getLogger(__name__)
 
-
 def configureLogger(logLevel: str):
     log_directory = "logs"
-    log_file_path = os.path.join(log_directory, "crypto_bot.log")
 
     # Ensure the directory exists
     if not os.path.exists(log_directory):
