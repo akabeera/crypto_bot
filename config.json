@@ -98,6 +98,7 @@
         }
     ],
     "support_currencies": [
+        "MATIC",
         "LPT",
         "WCFG",
         "BNT",
@@ -111,7 +112,6 @@
         "ICP",
         "FIL",
         "ASM",
-        "MATIC",
         "DOT",
         "AMP",
         "SHIB",
