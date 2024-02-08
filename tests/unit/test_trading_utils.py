@@ -57,7 +57,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(avg_position["price"], expected_price)
         self.assertEqual(avg_position["average"], expected_price)
 
-    def test_find_profitable_trades(self):
+    def test_find_profitable_trades_with_individual_lots(self):
         ticker_pair = "MATIC/USD"
 
         filter = {
@@ -67,7 +67,6 @@ class TestUtils(unittest.TestCase):
 
         avg_position = calculate_avg_position(all_positions)
         expected_avg_cost = 0.9252259314938164
-
 
         self.assertAlmostEqual(avg_position["price"], expected_avg_cost)
         self.assertAlmostEqual(avg_position["average"], expected_avg_cost)
@@ -94,6 +93,17 @@ class TestUtils(unittest.TestCase):
             position_ids_to_exit.append(pos["id"])
 
         self.assertEqual(set(position_ids_to_exit), set(expected_positions_ids_to_exit))
+
+    def test_find_profitable_trades_with_average_position(self):
+        ticker_pair = "MATIC/USD"
+
+        filter = {
+            "symbol": ticker_pair
+        }
+        all_positions = self.mongodb_service.query(DEFAULT_MONGO_TRADES_COLLECTION, filter)
+
+        avg_position = calculate_avg_position(all_positions)
+
     
 
 if __name__ == '__main__':

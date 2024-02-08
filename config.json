@@ -1,5 +1,5 @@
 {
-    "max_spend": 500,
+    "max_spend": 200,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
@@ -7,9 +7,9 @@
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
-    "dry_run": true,
+    "dry_run": false,
     "take_profits": {
-        "threshold_percent": 2.5,
+        "threshold_percent": 2,
         "evaluation_type": "INDIVIDUAL_LOTS" 
     },
     "mongodb":{
@@ -39,7 +39,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 30
+                "oversold_signal_threshold": 15
             }
         },
         {
@@ -79,7 +79,7 @@
                     "priority": 2,
                     "parameters": {
                         "overbought_signal_threshold": 72,
-                        "oversold_signal_threshold": 20
+                        "oversold_signal_threshold": 15
                     }
                 }
             ]

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position, round_down
+from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, round_down
 from strategies.base_strategy import BaseStrategy
 from strategies.strategy_factory import strategy_factory
 
@@ -82,11 +82,12 @@ def execute_strategies(ticker_pair: str,
                     strategy_to_run = strategies_overrides[ticker_pair][curr_strat_name]
             
             curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
-
+            logger.info(f"{ticker_pair}: strategy: {curr_strat_name}, priority: {priority}, action: {curr_action}")
             if s_idx == 0:
                 trade_action = curr_action
             else:
                 if trade_action != curr_action:
+                    trade_action = TradeAction.NOOP
                     break
                     
         if trade_action == TradeAction.BUY or trade_action == TradeAction.SELL:

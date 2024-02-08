@@ -120,8 +120,6 @@ class CryptoBot:
                 logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
 
-
-            print(ticker_info)
             profitable_positions_to_exit = find_profitable_trades(ticker_pair, 
                                                                   avg_position, 
                                                                   all_positions, 
@@ -156,7 +154,7 @@ class CryptoBot:
         
         if trade_action == TradeAction.BUY:
             logger.info(f"{ticker_pair}: BUY signal triggered")
-            return self.handle_buy_order(ticker_pair)    
+            return self.handle_buy_order(ticker_pair, ticker_info)    
         elif trade_action == TradeAction.SELL:
             logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
             return self.handle_sell_order(ticker_pair, ticker_info, all_positions)

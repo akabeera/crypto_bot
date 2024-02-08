@@ -91,6 +91,8 @@ def find_profitable_trades(ticker_pair: str,
     elif take_profit_evaluation_type == TakeProfitEvaluationType.INDIVIDUAL_LOTS:
         for position in all_positions:
             profit_pct = calculate_profit_percent(position, bid_price)
+            logger.info(f'{ticker_pair}: lot {position["id"]}, profit pct: {profit_pct * 100}%')
+
             if profit_pct >= take_profit_threshold:
                 logger.info(f'{ticker_pair}: selling individual lot {position["id"]}, profit pct: {profit_pct * 100}%')
                 profitable_positions.append(position)
