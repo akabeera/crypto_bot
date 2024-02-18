@@ -3,7 +3,7 @@
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
-    "cooldown_num_periods": 20,
+    "trade_cooldown_period": 20,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",

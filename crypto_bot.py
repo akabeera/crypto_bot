@@ -26,16 +26,16 @@ class CryptoBot:
         with open(CONFIG_FILE) as f:
             self.config = json.load(f)
         
-        self.ticker_cooldown_periods = {}
+        self.ticker_trades_cooldown_periods = {}
 
         self.max_spend = Decimal(self.config["max_spend"])
         self.amount_per_transaction = Decimal(self.config["amount_per_transaction"])
         self.reinvestment_percent = Decimal(self.config["reinvestment_percent"]/100)
         self.remaining_balance = self.max_spend
         self.limit_order_time_limit = 10
-        self.cooldown_num_periods = 10
-        if "cooldown_num_periods" in self.config:
-            self.cooldown_num_periods = self.config["cooldown_num_periods"]
+        self.trade_cooldown_period = 10
+        if "trade_cooldown_period" in self.config:
+            self.trade_cooldown_period = self.config["trade_cooldown_period"]
 
         self.currency: str = self.config["currency"]
         self.sleep_interval = self.config["sleep_interval"]
@@ -56,9 +56,6 @@ class CryptoBot:
 
         exchange_config = self.config["exchange"]
         self.exchange_service = ExchangeService(exchange_config)
-
-        for ticker in self.supported_crypto_list:
-            self.ticker_cooldown_periods[ticker + "/USD"] = []
 
         take_profit_threshold = DEFAULT_TAKE_PROFIT_THRESHOLD
         take_profit_evaluation_type = DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
@@ -181,7 +178,7 @@ class CryptoBot:
         
         self.remaining_balance -= self.amount_per_transaction
         self.mongodb_service.insert_one(self.current_positions_collection, order)
-        self.ticker_cooldown_periods[ticker_pair].append(time.time())
+        self.ticker_trades_cooldown_periods[ticker_pair] = time.time()
         logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
         return order
@@ -233,29 +230,31 @@ class CryptoBot:
         return closed_position
 
     def ticker_in_cooldown(self, ticker_pair):
-        if ticker_pair not in self.ticker_cooldown_periods:
-            logger.error(f"{ticker_pair} no entry in cooldown, aborting")
+        if ticker_pair not in self.ticker_trades_cooldown_periods:
             return False
         
-        periods = self.ticker_cooldown_periods[ticker_pair]
-        num_periods = len(periods)        
-        if num_periods > 0 and num_periods < self.cooldown_num_periods +  1:
-            logger.info(f"{ticker_pair}: current cooldown ${len(periods)} of {self.cooldown_num_periods}")
+        last_trade_timestamp = self.ticker_trades_cooldown_periods[ticker_pair]
+        current_time = time.time()
+        elapsed_time = current_time - last_trade_timestamp
+        elapse_time_minutes = elapsed_time/60
+              
+        if elapse_time_minutes < self.trade_cooldown_period:
+            logger.info(f"{ticker_pair}: currently in cooldown, elapse {elapse_time_minutes} minutes so far")
             return True
         
         return False
 
     def handle_cooldown(self, ticker_pair):
-        if ticker_pair not in self.ticker_cooldown_periods:
+        if ticker_pair not in self.ticker_trades_cooldown_periods:
             return 
         
-        periods = self.ticker_cooldown_periods[ticker_pair]
-        if len(periods) == 0:
-            return
+        last_trade_timestamp = self.ticker_trades_cooldown_periods[ticker_pair]
+        current_time = time.time()
+        elapsed_time = current_time - last_trade_timestamp
+        elapse_time_minutes = elapsed_time/60
         
-        self.ticker_cooldown_periods[ticker_pair].append(time.time())
-        if len(periods) > self.cooldown_num_periods + 1:
+        if elapse_time_minutes >= self.trade_cooldown_period:
             logger.info(f"{ticker_pair}: resetting cooldown")
-            periods.clear()
+            del self.ticker_trades_cooldown_periods[ticker_pair]
 
  
