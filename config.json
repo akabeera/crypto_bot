@@ -1,9 +1,9 @@
 {
-    "max_spend": 200,
+    "max_spend": 500,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
-    "cooldown_num_periods": 30,
+    "cooldown_num_periods": 20,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
@@ -39,7 +39,8 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 15
+                "oversold_signal_threshold": 20,
+                "num_candles_required": 3
             }
         },
         {
@@ -60,7 +61,7 @@
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 20,
+                "threshold_percent": 25,
                 "num_times": 2
             } 
         },
@@ -71,19 +72,6 @@
         }
     ],
     "strategies_overrides": [
-        {
-            "tickers":["SHIB/USD"],
-            "strategies": [
-                {
-                    "name": "RSI",
-                    "priority": 2,
-                    "parameters": {
-                        "overbought_signal_threshold": 72,
-                        "oversold_signal_threshold": 15
-                    }
-                }
-            ]
-        },
         {
             "tickers":["WCFG/USD", "OXT/USD", "SNX/USD"],
             "strategies": [

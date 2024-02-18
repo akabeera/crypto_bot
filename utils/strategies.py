@@ -82,7 +82,7 @@ def execute_strategies(ticker_pair: str,
                     strategy_to_run = strategies_overrides[ticker_pair][curr_strat_name]
             
             curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
-            logger.info(f"{ticker_pair}: strategy: {curr_strat_name}, priority: {priority}, action: {curr_action}")
+            #logger.info(f"{ticker_pair}: strategy: {curr_strat_name}, priority: {priority}, action: {curr_action}")
             if s_idx == 0:
                 trade_action = curr_action
             else:

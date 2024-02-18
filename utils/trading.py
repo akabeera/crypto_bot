@@ -74,8 +74,8 @@ def find_profitable_trades(ticker_pair: str,
     if not avg_position:
         return None
     
-    if "bid" not in ticker_info:
-        logger.error(f"{ticker_pair}: missing bid_price, aborting evaluate_profit")
+    if "bid" not in ticker_info or ticker_info["bid"] is None:
+        logger.error(f"{ticker_pair}: missing or None bid_price, aborting evaluate_profit")
         return None
     
     bid_price = ticker_info["bid"]
@@ -91,7 +91,7 @@ def find_profitable_trades(ticker_pair: str,
     elif take_profit_evaluation_type == TakeProfitEvaluationType.INDIVIDUAL_LOTS:
         for position in all_positions:
             profit_pct = calculate_profit_percent(position, bid_price)
-            logger.info(f'{ticker_pair}: lot {position["id"]}, profit pct: {profit_pct * 100}%')
+            #logger.info(f'{ticker_pair}: lot {position["id"]}, profit pct: {profit_pct * 100}%')
 
             if profit_pct >= take_profit_threshold:
                 logger.info(f'{ticker_pair}: selling individual lot {position["id"]}, profit pct: {profit_pct * 100}%')
