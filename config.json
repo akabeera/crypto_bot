@@ -3,12 +3,13 @@
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
-    "cooldown_num_periods": 30,
+    "cooldown_num_periods": 20,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
+    "dry_run": false,
     "take_profits": {
-        "threshold_percent": 2.5,
+        "threshold_percent": 2,
         "evaluation_type": "INDIVIDUAL_LOTS" 
     },
     "mongodb":{
@@ -25,14 +26,6 @@
     },
     "strategies": [
         {
-            "name": "AVERAGE_DOWN",
-            "priority": 1,
-            "parameters": {
-                "threshold_percent": 20,
-                "num_times": 2
-            } 
-        },
-        {
             "name": "BOLLINGER_BANDS",
             "priority": 2,
             "parameters": {
@@ -46,7 +39,8 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 30
+                "oversold_signal_threshold": 20,
+                "num_candles_required": 3
             }
         },
         {
@@ -64,25 +58,20 @@
             }
         },
         {
+            "name": "AVERAGE_DOWN",
+            "priority": 1,
+            "parameters": {
+                "threshold_percent": 25,
+                "num_times": 2
+            } 
+        },
+        {
             "name": "MACD",
             "priority": 2,
             "prevent_loss": true
         }
     ],
     "strategies_overrides": [
-        {
-            "tickers":["SHIB/USD"],
-            "strategies": [
-                {
-                    "name": "RSI",
-                    "priority": 2,
-                    "parameters": {
-                        "overbought_signal_threshold": 72,
-                        "oversold_signal_threshold": 20
-                    }
-                }
-            ]
-        },
         {
             "tickers":["WCFG/USD", "OXT/USD", "SNX/USD"],
             "strategies": [
@@ -97,6 +86,7 @@
         }
     ],
     "support_currencies": [
+        "MATIC",
         "LPT",
         "WCFG",
         "BNT",
@@ -110,7 +100,6 @@
         "ICP",
         "FIL",
         "ASM",
-        "MATIC",
         "DOT",
         "AMP",
         "SHIB",

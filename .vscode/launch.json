@@ -66,5 +66,13 @@
             "args": ["--op=populate_ohlcv"],
             "justMyCode": false
         },
+        {
+            "name": "unittest",
+            "type": "python",
+            "request": "launch",
+            "module": "unittest",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
     ]
 }

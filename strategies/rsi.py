@@ -16,6 +16,10 @@ class RSI(BaseStrategy):
         self.overbought_signal_threshold = parameters["overbought_signal_threshold"]
         self.oversold_signal_threshold = parameters["oversold_signal_threshold"]
 
+        self.num_candles_required = 1
+        if "num_candles_required" in parameters:
+            self.num_candles_required = parameters["num_candles_required"]
+
         super().__init__(config)
 
 
@@ -23,19 +27,20 @@ class RSI(BaseStrategy):
         rsi_key = "RSI"
         candles_df[rsi_key] = talib.RSI(candles_df['close'] * 100000)
 
-        last_row = candles_df.iloc[-1]
-        rsi = last_row[rsi_key]
+        #last_row = candles_df.iloc[-1]
+
+        candles_to_evaluate = candles_df.tail(self.num_candles_required)
+        #rsi = last_row[rsi_key]
 
         ticker = ticker_info["symbol"]
-
         #logger.info(f"{ticker}: REGULAR RSI: {rsi}")
 
         action = TradeAction.NOOP
-        if rsi > self.overbought_signal_threshold:
+        if (candles_to_evaluate[rsi_key] > self.overbought_signal_threshold).all():
             logger.debug(f'{ticker}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
-        elif rsi < self.oversold_signal_threshold:
-            logger.debug(f'{ticker}: {self.name} triggered BUY signal, RSI: {rsi}')
+        elif (candles_to_evaluate[rsi_key] < self.oversold_signal_threshold).all():
+            logger.debug(f'{ticker}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 
         if self.prevent_loss and action == TradeAction.SELL:

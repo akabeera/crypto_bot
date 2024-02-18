@@ -56,16 +56,14 @@ class ExchangeService:
             if op == "fetchTicker":
                 return self.exchange_client.fetch_ticker(ticker_pair)
             elif op == "fetchOHLCV":
-                return self.exchange_client.fetch_ohlcv(ticker_pair)
-            elif op == "fetchOrder":
                 timeframe = "1m"
                 if "timeframe" in params:
                     timeframe = params["timeframe"]
                 if "since" in params:
                     since = params["since"]
-                    order = self.exchange_client.fetch_order(order_id, timeframe, since)
-                else:
-                    order = self.exchange_client.fetch_order(order_id, timeframe)
+                return self.exchange_client.fetch_ohlcv(ticker_pair)
+            elif op == "fetchOrder":         
+                order = self.exchange_client.fetch_order(order_id)
                 return order
             elif op == "fetchOrders":
                 return self.exchange_client.fetch_orders(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 500)

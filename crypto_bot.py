@@ -5,11 +5,13 @@ import pandas as pd
 from decimal import *
 from dotenv import load_dotenv
 
+from strategies.base_strategy import BaseStrategy
 from strategies.strategy_factory import strategy_factory
-from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, calculate_avg_position, round_down
+from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_profit_percent, calculate_avg_position, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 from utils.constants import ZERO, DEFAULT_TAKE_PROFIT_THRESHOLD, DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
+from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
 from utils.logger import logger
 
 load_dotenv()
@@ -66,60 +68,19 @@ class CryptoBot:
             take_profit_threshold = take_profits_config["threshold_percent"]
             take_profit_evaluation_type = take_profits_config["evaluation_type"]
 
+        self.dry_run = False
+        if "dry_run" in self.config:
+            self.dry_run = self.config["dry_run"]
+
         self.take_profit_threshold = Decimal(take_profit_threshold/100)
         self.take_profit_evaluation_type = TakeProfitEvaluationType[take_profit_evaluation_type]
 
-        self.init_strategies()
+        self.init()
 
-    def init_strategies(self):
-        strategies_json = self.config["strategies"]
-
-        self.strategies = {}
-        self.strategies_priorities = []
-        self.strategies_overrides = {}
-        
-        for strategy_json in strategies_json:
-            strategy_priority = strategy_json["priority"]
-            strategy_enabled = True
-            if "enabled" in strategy_json:
-                strategy_enabled = strategy_json["enabled"]
-
-            if not strategy_enabled:
-                continue
-
-            strategy_object = strategy_factory(strategy_json)
-
-            if strategy_object is None:
-                logger.warn(f"Encountered unsupported strategy config: {strategy_json}")
-                continue
-
-            if strategy_priority in self.strategies:
-                self.strategies[strategy_priority].append(strategy_object)
-            else:
-                self.strategies[strategy_priority] = [strategy_object]
-
-            if strategy_priority not in self.strategies_priorities:
-                self.strategies_priorities.append(strategy_priority)
-        
-        #overrides does NOT override priorities of the base strategy
-        if "strategies_overrides" in self.config:
-            sos = self.config["strategies_overrides"]
-            for so in sos:
-                tickers = so["tickers"]
-
-                for ticker in tickers:
-                    if ticker not in self.strategies_overrides:
-                            self.strategies_overrides[ticker] = {}
-                    
-                    for s in so["strategies"]:
-                        strat_name = s["name"]
-                        strat_object =  strategy_factory(s)
-                        # if strat_name not in strategies_overrides[ticker]:
-                        #     strategies_overrides[ticker][strat_name] = {}
-                        self.strategies_overrides[ticker][strat_name] = strat_object
-
-        self.strategies_priorities.sort()
-            
+    def init(self):
+        self.strategies: dict[str, BaseStrategy] = init_strategies(self.config)
+        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config)
+                        
     def run(self):
         idx = 0
         N = len(self.supported_crypto_list)
@@ -145,7 +106,7 @@ class CryptoBot:
 
             r, c = candles_df.shape
             if r < 4:
-                logger.warn(f"{ticker_pair}: not enough candles({r}), skipping")
+                logger.warning(f"{ticker_pair}: not enough candles({r}), skipping")
                 continue
 
             ticker_filter = {
@@ -155,71 +116,87 @@ class CryptoBot:
             avg_position = calculate_avg_position(all_positions) 
 
             ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
-            if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
-                logger.error(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
+            if ticker_info is None:
+                logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
                 continue
 
-            ask_price = ticker_info['ask']
-            bid_price = ticker_info['bid']
-
-            profits_results = self.evaluate_profits(ticker_pair, avg_position, all_positions, bid_price)
-            if profits_results is not None:
-                logger.info(f"{ticker_pair}: took profits and exited positions, skipping strategy evaluation")
+            profitable_positions_to_exit = find_profitable_trades(ticker_pair, 
+                                                                  avg_position, 
+                                                                  all_positions, 
+                                                                  ticker_info, 
+                                                                  self.take_profit_threshold, 
+                                                                  self.take_profit_evaluation_type)
+            if profitable_positions_to_exit is not None:
+                logger.info(f"{ticker_pair}: number of profitable positions to exit: {len(profitable_positions_to_exit)}")
+                self.handle_sell_order(ticker_pair, ticker_info, profitable_positions_to_exit)
                 continue
 
             self.handle_cooldown(ticker_pair)
-            for priority in self.strategies_priorities:
-                current_strategies = self.strategies[priority]
-
-                trade_action = TradeAction.NOOP
-                for s_idx, strategy in enumerate(current_strategies):
-                    curr_strat_name = strategy.name
-                    curr_action = TradeAction.NOOP
-                    strategy_to_run = strategy
-                    if ticker_pair in self.strategies_overrides and curr_strat_name in self.strategies_overrides[ticker_pair]:
-                        strategy_to_run = self.strategies_overrides[ticker_pair][curr_strat_name]
-                    
-                    curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
-
-                    if s_idx == 0:
-                        trade_action = curr_action
-                    else:
-                        if trade_action != curr_action:
-                            trade_action = TradeAction.NOOP
-                            break
-
-                if trade_action == TradeAction.BUY:
-                    logger.info(f"{ticker_pair}: BUY signal triggered @ ask price: ${ask_price}")
-                    self.handle_buy_order(ticker_pair)
-                    break
-                elif trade_action == TradeAction.SELL:
-                    logger.info(f'{ticker_pair}: SELL signal triggered @ bid price: ${bid_price}, shares:{avg_position["amount"]}, num_positions: {len(all_positions)}')
-                    self.handle_sell_order(ticker_pair, float(bid_price), all_positions)
-                    break
+            trade_action = execute_strategies(ticker_pair, 
+                                              self.strategies, 
+                                              avg_position, 
+                                              ticker_info, 
+                                              candles_df, 
+                                              self.strategies_overrides)
             
+            self.execute_trade_action(ticker_pair, 
+                                      trade_action, 
+                                      ticker_info, 
+                                      all_positions)    
+                    
             time.sleep(self.inter_currency_sleep_interval)
-    
-    def handle_buy_order(self, ticker_pair: str):
+
+    def execute_trade_action(self, 
+                             ticker_pair: str, 
+                             trade_action: TradeAction, 
+                             ticker_info,
+                             all_positions):
+        
+        if trade_action == TradeAction.BUY:
+            logger.info(f"{ticker_pair}: BUY signal triggered")
+            return self.handle_buy_order(ticker_pair, ticker_info)    
+        elif trade_action == TradeAction.SELL:
+            logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
+            return self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+        
+        return None
+        
+    def handle_buy_order(self, ticker_pair: str, ticker_info):
+        if self.dry_run:
+            logger.info(f"{ticker_pair}: dry_run enabled, skipping buy order execution")
+            return None
+        
         if self.ticker_in_cooldown(ticker_pair):
             logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
-            return
+            return None
 
         if self.remaining_balance < self.amount_per_transaction:
             logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
-            return
+            return None
         
-        #order = self.create_buy_order(ticker_pair, self.amount_per_transaction)
         order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", total_cost=self.amount_per_transaction, order_type="buy")
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
-            return
+            return None
+        
         self.remaining_balance -= self.amount_per_transaction
         self.mongodb_service.insert_one(self.current_positions_collection, order)
         self.ticker_cooldown_periods[ticker_pair].append(time.time())
         logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
+        return order
 
-    def handle_sell_order(self, ticker_pair: str, bid_price: float, positions_to_exit):
+    def handle_sell_order(self, ticker_pair: str, ticker_info, positions_to_exit):
+        if "bid" not in ticker_info:
+            logger.error(f"{ticker_info}: missing bid price in ticker_info, aborting handle_sell_order")
+            return None
+        
+        bid_price = ticker_info["bid"]
+
+        if self.dry_run:
+            logger.info(f"{ticker_pair}: dry_run enabled, skipping sell order execution")
+            return None
+                    
         shares: float = 0.0
         positions_to_delete = []
         for position in positions_to_exit:
@@ -254,36 +231,6 @@ class CryptoBot:
 
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
         return closed_position
-
-    def evaluate_profits(self, ticker_pair, avg_position, all_positions, bid_price):
-        if not avg_position:
-            return None
-        
-        positions_to_exit = []
-        if self.take_profit_evaluation_type == TakeProfitEvaluationType.AVERAGE:
-            profit_pct = calculate_profit_percent(avg_position, bid_price)
-
-            if profit_pct >= self.take_profit_threshold:
-                logger.info(f'{ticker_pair}: profits meets threshold, AVERAGE evaluation type')
-                positions_to_exit = all_positions
-
-        elif self.take_profit_evaluation_type == TakeProfitEvaluationType.INDIVIDUAL_LOTS:
-            for position in all_positions:
-                profit_pct = calculate_profit_percent(position, bid_price)
-                if profit_pct >= self.take_profit_threshold:
-                    logger.info(f'{ticker_pair}: selling individual lot {position["id"]}, profit pct: {profit_pct * 100}%')
-                    positions_to_exit.append(position)
-
-        elif self.take_profit_evaluation_type == TakeProfitEvaluationType.OPTIMIZED:
-            logger.warn(f'{ticker_pair}: take profit evaluation type of OPTIMIZED not supported yet')
-        else:
-            pass        
-
-        if len(positions_to_exit) == 0:
-            return None
-        
-        logger.info(f"{ticker_pair}: take profits triggered, num of positions selling: {len(positions_to_exit)}")
-        return self.handle_sell_order(ticker_pair, bid_price, positions_to_exit)
 
     def ticker_in_cooldown(self, ticker_pair):
         if ticker_pair not in self.ticker_cooldown_periods:
