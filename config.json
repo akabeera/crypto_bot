@@ -12,7 +12,8 @@
         "threshold_percent": 2,
         "evaluation_type": "INDIVIDUAL_LOTS" 
     },
-    "mongodb":{
+    "db":{
+        "db_type": "mongodb",
         "db_name": "crypto-bot",
         "current_positions_collection": "trades",
         "closed_positions_collection" : "sell_orders"
@@ -71,7 +72,7 @@
             "prevent_loss": true
         }
     ],
-    "strategies_overrides": [
+    "overrides": [
         {
             "tickers":["WCFG/USD", "OXT/USD", "SNX/USD"],
             "strategies": [
@@ -106,7 +107,12 @@
         "COMP",
         "ATOM",
         "IOTX",
-        "BTC"
+        "BTC",
+        "ADA",
+        "LINK",
+        "XLM",
+        "MKR",
+        "QNT"
     ],
     "blacklisted_currencies": []
 }

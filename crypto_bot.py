@@ -2,15 +2,16 @@ import json
 import os
 import time
 import pandas as pd
+import utils.constants as CONSTANTS
 from decimal import *
 from dotenv import load_dotenv
+
 
 from strategies.base_strategy import BaseStrategy
 from strategies.strategy_factory import strategy_factory
 from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_profit_percent, calculate_avg_position, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
-from utils.constants import ZERO, DEFAULT_TAKE_PROFIT_THRESHOLD, DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
 from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
 from utils.logger import logger
 
@@ -28,46 +29,48 @@ class CryptoBot:
         
         self.ticker_trades_cooldown_periods = {}
 
-        self.max_spend = Decimal(self.config["max_spend"])
-        self.amount_per_transaction = Decimal(self.config["amount_per_transaction"])
-        self.reinvestment_percent = Decimal(self.config["reinvestment_percent"]/100)
+        self.max_spend = Decimal(self.config[CONSTANTS.CONFIG_MAX_SPEND])
+        self.amount_per_transaction = Decimal(self.config[CONSTANTS.CONFIG_AMOUNT_PER_TRANSACTION])
+        self.reinvestment_percent = Decimal(self.config[CONSTANTS.CONFIG_REINVESTMENT_PERCENT]/100)
         self.remaining_balance = self.max_spend
         self.limit_order_time_limit = 10
         self.trade_cooldown_period = 10
-        if "trade_cooldown_period" in self.config:
-            self.trade_cooldown_period = self.config["trade_cooldown_period"]
+        if CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD in self.config:
+            self.trade_cooldown_period = self.config[CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD]
 
-        self.currency: str = self.config["currency"]
-        self.sleep_interval = self.config["sleep_interval"]
-        self.inter_currency_sleep_interval = self.config["inter_currency_sleep_interval"]
+        self.currency: str = self.config[CONSTANTS.CONFIG_CURRENCY]
+        self.sleep_interval = self.config[CONSTANTS.CONFIG_SLEEP_INTERVAL]
+        self.inter_currency_sleep_interval = self.config[CONSTANTS.CONFIG_INTER_CURRENCY_SLEEP_INTERVAL]
 
-        self.crypto_whitelist = self.config["support_currencies"]
+        self.crypto_whitelist = self.config[CONSTANTS.CONFIG_SUPPORTED_CURRENCIES]
         self.crypto_blacklist = []
-        if "blacklisted_currencies" in self.config:
-            self.crypto_blacklist = self.config["blacklisted_currencies"]
+        if CONSTANTS.CONFIG_BLACKLISTED_CURRENCIES in self.config:
+            self.crypto_blacklist = self.config[CONSTANTS.CONFIG_BLACKLISTED_CURRENCIES]
 
         self.supported_crypto_list = list(set(self.crypto_whitelist).difference(self.crypto_blacklist))
 
-        mongodb_config = self.config["mongodb"] 
-        self.mongodb_db_name = mongodb_config["db_name"]
-        self.current_positions_collection = mongodb_config["current_positions_collection"]
-        self.closed_positions_collection = mongodb_config["closed_positions_collection"]
+        #TODO: Abstract mongodb service into a data_service
+        db_config = self.config[CONSTANTS.CONFIG_DB]
+        db_type = db_config[CONSTANTS.CONFIG_DB_TYPE] 
+        self.mongodb_db_name = db_config[CONSTANTS.CONFIG_DB_NAME]
+        self.current_positions_collection = db_config[CONSTANTS.CONFIG_DB_CURRENT_POSITIONS_COLLECTION]
+        self.closed_positions_collection = db_config[CONSTANTS.CONFIG_DB_CLOSED_POSITIONS_COLLECTION]
         self.mongodb_service = MongoDBService(db_connection_string, self.mongodb_db_name)
 
-        exchange_config = self.config["exchange"]
+        exchange_config = self.config[CONSTANTS.CONFIG_EXCHANGE]
         self.exchange_service = ExchangeService(exchange_config)
 
-        take_profit_threshold = DEFAULT_TAKE_PROFIT_THRESHOLD
-        take_profit_evaluation_type = DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
+        take_profit_threshold = CONSTANTS.DEFAULT_TAKE_PROFIT_THRESHOLD
+        take_profit_evaluation_type = CONSTANTS.DEFAULT_TAKE_PROFIT_EVALUATION_TYPE
 
-        if "take_profits" in self.config:
-            take_profits_config = self.config["take_profits"]
-            take_profit_threshold = take_profits_config["threshold_percent"]
-            take_profit_evaluation_type = take_profits_config["evaluation_type"]
+        if CONSTANTS.CONFIG_TAKE_PROFITS in self.config:
+            take_profits_config = self.config[CONSTANTS.CONFIG_TAKE_PROFITS]
+            take_profit_threshold = take_profits_config[CONSTANTS.CONFIG_PROFIT_THRESHOLD_PERCENT]
+            take_profit_evaluation_type = take_profits_config[CONSTANTS.CONFIG_PROFIT_EVALUATION_TYPE]
 
         self.dry_run = False
-        if "dry_run" in self.config:
-            self.dry_run = self.config["dry_run"]
+        if CONSTANTS.CONFIG_DRY_RUN in self.config:
+            self.dry_run = self.config[CONSTANTS.CONFIG_DRY_RUN]
 
         self.take_profit_threshold = Decimal(take_profit_threshold/100)
         self.take_profit_evaluation_type = TakeProfitEvaluationType[take_profit_evaluation_type]
@@ -178,7 +181,7 @@ class CryptoBot:
         
         self.remaining_balance -= self.amount_per_transaction
         self.mongodb_service.insert_one(self.current_positions_collection, order)
-        self.ticker_trades_cooldown_periods[ticker_pair] = time.time()
+        self.start_cooldown(ticker_pair)
         logger.info(f"{ticker_pair}: BUY executed. price: {order['price']}, shares: {order['filled']}, fees: {order['fee']['cost']}, remaining balance: {self.remaining_balance}")
 
         return order
@@ -223,11 +226,14 @@ class CryptoBot:
             logger.warn(f"{ticker_pair}: mismatch of deleted positions, deletion count: {deletion_count}, positions exited:{len(positions_to_exit)}")
 
         proceeds = order['info']['total_value_after_fees']
-        if self.reinvestment_percent > ZERO:
+        if self.reinvestment_percent > CONSTANTS.ZERO:
             self.remaining_balance += (Decimal(proceeds) * self.reinvestment_percent)
 
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
         return closed_position
+
+    def start_cooldown(self, ticker_pair):
+        self.ticker_trades_cooldown_periods[ticker_pair] = time.time()
 
     def ticker_in_cooldown(self, ticker_pair):
         if ticker_pair not in self.ticker_trades_cooldown_periods:
