@@ -55,12 +55,13 @@ def init_strategies_overrides(config):
             if ticker not in strategies_overrides:
                     strategies_overrides[ticker] = dict()
             
-            for s in so[CONSTANTS.CONFIG_STRATEGIES]:
-                strat_name = s[CONSTANTS.CONFIG_STRATEGY_NAME]
-                strat_object =  strategy_factory(s)
+            if CONSTANTS.CONFIG_STRATEGIES in so:
+                for s in so[CONSTANTS.CONFIG_STRATEGIES]:
+                    strat_name = s[CONSTANTS.CONFIG_STRATEGY_NAME]
+                    strat_object =  strategy_factory(s)
 
-                logger.info(f"{ticker}: setting strategy override for strategy: {strat_name}")
-                strategies_overrides[ticker][strat_name] = strat_object
+                    logger.info(f"{ticker}: setting strategy override for strategy: {strat_name}")
+                    strategies_overrides[ticker][strat_name] = strat_object
 
     return strategies_overrides
 

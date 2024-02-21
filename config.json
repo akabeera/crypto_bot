@@ -32,7 +32,6 @@
             "parameters": {
                 "window": 20,
                 "std_dev": 2
-                
             }
         },
         {
@@ -40,7 +39,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 20,
+                "oversold_signal_threshold": 25,
                 "num_candles_required": 3
             }
         },
@@ -74,19 +73,24 @@
     ],
     "overrides": [
         {
-            "tickers":["WCFG/USD", "OXT/USD", "SNX/USD"],
+            "tickers":["ASM/USD"],
             "strategies": [
                 {
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 25
+                        "threshold_percent": 30
                     }
                 }
             ]
+        },
+        {
+            "tickers":["ASM"],
+            "trade_cooldown_period": 10
         }
+        
     ],
-    "support_currencies": [
+    "supported_crypto_currencies": [
         "MATIC",
         "LPT",
         "WCFG",
