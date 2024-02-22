@@ -84,6 +84,7 @@ class CryptoBot:
                 take_profit_evaluation_type = take_profits_config[CONSTANTS.CONFIG_TAKE_PROFITS_EVALUATION_TYPE]
 
         take_profit_threshold = Decimal(take_profit_threshold/100)
+        take_profit_evaluation_type = TakeProfitEvaluationType[take_profit_evaluation_type]
 
         return (take_profit_threshold, take_profit_evaluation_type)
 

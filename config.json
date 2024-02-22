@@ -10,7 +10,7 @@
     "dry_run": false,
     "take_profits": {
         "threshold_percent": 2,
-        "evaluation_type": "INDIVIDUAL_LOTS" 
+        "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
     },
     "db":{
         "db_type": "mongodb",
@@ -79,16 +79,30 @@
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 30
+                        "threshold_percent": 35
+                    }
+                }
+            ],
+            "trade_cooldown_period": 30
+        },
+        {
+            "tickers": ["FIL/USD", "AAVE/USD", "SOL/USD", "DOGE/USD"],
+            "amount_per_transaction": 75
+        },
+        {
+            "tickers":["FIL/USD"],
+            "strategies": [
+                {
+                    "name": "RSI",
+                    "priority": 2,
+                    "parameters": {
+                        "overbought_signal_threshold": 70,
+                        "oversold_signal_threshold": 30,
+                        "num_candles_required": 3
                     }
                 }
             ]
-        },
-        {
-            "tickers":["ASM"],
-            "trade_cooldown_period": 10
         }
-        
     ],
     "supported_crypto_currencies": [
         "MATIC",
@@ -116,7 +130,8 @@
         "LINK",
         "XLM",
         "MKR",
-        "QNT"
+        "QNT",
+        "AAVE"
     ],
     "blacklisted_currencies": []
 }
