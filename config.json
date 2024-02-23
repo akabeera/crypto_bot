@@ -3,16 +3,17 @@
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
-    "cooldown_num_periods": 20,
+    "trade_cooldown_period": 20,
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
     "dry_run": false,
     "take_profits": {
         "threshold_percent": 2,
-        "evaluation_type": "INDIVIDUAL_LOTS" 
+        "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
     },
-    "mongodb":{
+    "db":{
+        "db_type": "mongodb",
         "db_name": "crypto-bot",
         "current_positions_collection": "trades",
         "closed_positions_collection" : "sell_orders"
@@ -31,7 +32,6 @@
             "parameters": {
                 "window": 20,
                 "std_dev": 2
-                
             }
         },
         {
@@ -39,7 +39,7 @@
             "priority": 2,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 20,
+                "oversold_signal_threshold": 25,
                 "num_candles_required": 3
             }
         },
@@ -71,21 +71,40 @@
             "prevent_loss": true
         }
     ],
-    "strategies_overrides": [
+    "overrides": [
         {
-            "tickers":["WCFG/USD", "OXT/USD", "SNX/USD"],
+            "tickers":["ASM/USD"],
             "strategies": [
                 {
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 25
+                        "threshold_percent": 35
+                    }
+                }
+            ],
+            "trade_cooldown_period": 30
+        },
+        {
+            "tickers": ["FIL/USD", "AAVE/USD", "SOL/USD", "DOGE/USD"],
+            "amount_per_transaction": 75
+        },
+        {
+            "tickers":["FIL/USD"],
+            "strategies": [
+                {
+                    "name": "RSI",
+                    "priority": 2,
+                    "parameters": {
+                        "overbought_signal_threshold": 70,
+                        "oversold_signal_threshold": 30,
+                        "num_candles_required": 3
                     }
                 }
             ]
         }
     ],
-    "support_currencies": [
+    "supported_crypto_currencies": [
         "MATIC",
         "LPT",
         "WCFG",
@@ -106,7 +125,13 @@
         "COMP",
         "ATOM",
         "IOTX",
-        "BTC"
+        "BTC",
+        "ADA",
+        "LINK",
+        "XLM",
+        "MKR",
+        "QNT",
+        "AAVE"
     ],
     "blacklisted_currencies": []
 }

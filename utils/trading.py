@@ -16,7 +16,8 @@ class TradeAction(Enum):
 class TakeProfitEvaluationType(Enum):
     AVERAGE = 0,
     INDIVIDUAL_LOTS = 1,
-    OPTIMIZED = 2
+    AVERAGE_THEN_INDIVIDUAL_LOTS = 2,
+    OPTIMIZED = 3
 
 FEE_MULTIPLIER = Decimal(1)
 
@@ -85,7 +86,7 @@ def find_profitable_trades(ticker_pair: str,
         profit_pct = calculate_profit_percent(avg_position, bid_price)
 
         if profit_pct >= take_profit_threshold:
-            logger.info(f'{ticker_pair}: profits meets threshold, AVERAGE evaluation type')
+            logger.info(f'{ticker_pair}: avg profits meets profit threshold')
             profitable_positions = all_positions
 
     elif take_profit_evaluation_type == TakeProfitEvaluationType.INDIVIDUAL_LOTS:
@@ -96,10 +97,27 @@ def find_profitable_trades(ticker_pair: str,
             if profit_pct >= take_profit_threshold:
                 logger.info(f'{ticker_pair}: selling individual lot {position["id"]}, profit pct: {profit_pct * 100}%')
                 profitable_positions.append(position)
+                
+    elif take_profit_evaluation_type == TakeProfitEvaluationType.AVERAGE_THEN_INDIVIDUAL_LOTS:
+        profit_pct = calculate_profit_percent(avg_position, bid_price)
+
+        if profit_pct >= take_profit_threshold:
+            logger.info(f'{ticker_pair}: avg profits meets profit threshold')
+            profitable_positions = all_positions
+        else:
+            for position in all_positions:
+                profit_pct = calculate_profit_percent(position, bid_price)
+                #logger.info(f'{ticker_pair}: lot {position["id"]}, profit pct: {profit_pct * 100}%')
+
+                if profit_pct >= take_profit_threshold:
+                    logger.info(f'{ticker_pair}: selling individual lot {position["id"]}, profit pct: {profit_pct * 100}%')
+                    profitable_positions.append(position)
 
     elif take_profit_evaluation_type == TakeProfitEvaluationType.OPTIMIZED:
         logger.warn(f'{ticker_pair}: take profit evaluation type of OPTIMIZED not supported yet')
     else:
+        logger.warn(f'{ticker_pair}: unsuppored evaluation type: {take_profit_evaluation_type}')
+
         pass        
 
     if len(profitable_positions) == 0:

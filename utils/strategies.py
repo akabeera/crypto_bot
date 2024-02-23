@@ -1,6 +1,7 @@
 import pandas as pd
+import utils.constants as CONSTANTS
 
-from utils.trading import TradeAction, TakeProfitEvaluationType, calculate_profit_percent, round_down
+from utils.trading import TradeAction
 from strategies.base_strategy import BaseStrategy
 from strategies.strategy_factory import strategy_factory
 
@@ -9,17 +10,17 @@ from utils.logger import logger
 def init_strategies(config):
 
     strategies: dict[int, BaseStrategy] = dict()
-    if "strategies" not in config:
+    if CONSTANTS.CONFIG_STRATEGIES not in config:
         logger.warning("missing strategies config, returning empty strategies")
         return strategies
 
-    strategies_config = config["strategies"]
+    strategies_config = config[CONSTANTS.CONFIG_STRATEGIES]
     
     for strategy_config in strategies_config:
-        strategy_priority = strategy_config["priority"]
+        strategy_priority = strategy_config[CONSTANTS.CONFIG_STRATEGY_PRIORITY]
         strategy_enabled = True
-        if "enabled" in strategy_config:
-            strategy_enabled = strategy_config["enabled"]
+        if CONSTANTS.CONFIG_ENABLED in strategy_config:
+            strategy_enabled = strategy_config[CONSTANTS.CONFIG_ENABLED]
 
         if not strategy_enabled:
             continue
@@ -42,24 +43,25 @@ def init_strategies(config):
 def init_strategies_overrides(config):
 
     strategies_overrides: dict[str, dict[str, BaseStrategy]] = dict()
-    if "strategies_overrides" not in config:
+    if CONSTANTS.CONFIG_OVERRIDES not in config:
         return strategies_overrides
     
-    strategies_overrides_config = config["strategies_overrides"]
+    overrides_config = config[CONSTANTS.CONFIG_OVERRIDES]
 
-    for so in strategies_overrides_config:
-        tickers = so["tickers"]
+    for so in overrides_config:
+        tickers = so[CONSTANTS.CONFIG_TICKERS]
 
         for ticker in tickers:
             if ticker not in strategies_overrides:
                     strategies_overrides[ticker] = dict()
             
-            for s in so["strategies"]:
-                strat_name = s["name"]
-                strat_object =  strategy_factory(s)
+            if CONSTANTS.CONFIG_STRATEGIES in so:
+                for s in so[CONSTANTS.CONFIG_STRATEGIES]:
+                    strat_name = s[CONSTANTS.CONFIG_STRATEGY_NAME]
+                    strat_object =  strategy_factory(s)
 
-                logger.info(f"{ticker}: setting strategy override for strategy: {strat_name}")
-                strategies_overrides[ticker][strat_name] = strat_object
+                    logger.info(f"{ticker}: setting strategy override: {strat_name}")
+                    strategies_overrides[ticker][strat_name] = strat_object
 
     return strategies_overrides
 
@@ -82,7 +84,7 @@ def execute_strategies(ticker_pair: str,
                     strategy_to_run = strategies_overrides[ticker_pair][curr_strat_name]
             
             curr_action = strategy_to_run.eval(avg_position, candles_df, ticker_info)    
-            #logger.info(f"{ticker_pair}: strategy: {curr_strat_name}, priority: {priority}, action: {curr_action}")
+            logger.debug(f"{ticker_pair}: strategy: {curr_strat_name}, priority: {priority}, action: {curr_action}")
             if s_idx == 0:
                 trade_action = curr_action
             else:
