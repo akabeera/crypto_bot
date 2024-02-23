@@ -60,7 +60,7 @@ def init_strategies_overrides(config):
                     strat_name = s[CONSTANTS.CONFIG_STRATEGY_NAME]
                     strat_object =  strategy_factory(s)
 
-                    logger.info(f"{ticker}: setting strategy override for strategy: {strat_name}")
+                    logger.info(f"{ticker}: setting strategy override: {strat_name}")
                     strategies_overrides[ticker][strat_name] = strat_object
 
     return strategies_overrides

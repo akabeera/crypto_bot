@@ -89,12 +89,12 @@ class CryptoBot:
         return (take_profit_threshold, take_profit_evaluation_type)
 
     def init_overrides(self):
-        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config)
-
         if CONSTANTS.CONFIG_OVERRIDES not in self.config:
             return
         
+        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config)
         self.overrides: dict[str, dict[str, any]] = dict()
+
         overrides_config = self.config[CONSTANTS.CONFIG_OVERRIDES]
         overrideable_attributes = set(CONSTANTS.CONFIG_OVERRIDEABLE_ATTRIBUTES)
 
@@ -288,9 +288,7 @@ class CryptoBot:
             return False
         
         last_trade_timestamp = self.ticker_trades_cooldown_periods[ticker_pair]
-        current_time = time.time()
-        elapsed_time = current_time - last_trade_timestamp
-        elapse_time_minutes = elapsed_time/60 
+        elapse_time_minutes = self.get_elapse_time_mins(last_trade_timestamp)
 
         trade_cooldown_period = self.trade_cooldown_period
         if ticker_pair in self.overrides and CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD in self.overrides[ticker_pair]:
@@ -307,12 +305,15 @@ class CryptoBot:
             return 
         
         last_trade_timestamp = self.ticker_trades_cooldown_periods[ticker_pair]
-        current_time = time.time()
-        elapsed_time = current_time - last_trade_timestamp
-        elapse_time_minutes = elapsed_time/60
+        elapse_time_minutes = self.get_elapse_time_mins(last_trade_timestamp)
         
         if elapse_time_minutes >= self.trade_cooldown_period:
             logger.info(f"{ticker_pair}: resetting cooldown")
             del self.ticker_trades_cooldown_periods[ticker_pair]
 
- 
+    def get_elapse_time_mins(self, timestamp):
+        current_time = time.time()
+        elapsed_time = current_time - timestamp
+        elapse_time_minutes = elapsed_time/60
+
+        return elapse_time_minutes
