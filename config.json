@@ -79,15 +79,20 @@
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 35
+                        "threshold_percent": 40
                     }
                 }
             ],
-            "trade_cooldown_period": 30
+            "trade_cooldown_period": 30,
+            "amount_per_transaction": 50
         },
         {
-            "tickers": ["FIL/USD", "AAVE/USD", "SOL/USD", "DOGE/USD"],
+            "tickers": ["AAVE/USD", "DOGE/USD"],
             "amount_per_transaction": 75
+        },
+        {
+            "tickers": ["FIL/USD", "BTC/USD", "SOL/USD", "MATIC/USD"],
+            "amount_per_transaction": 100
         },
         {
             "tickers":["FIL/USD"],

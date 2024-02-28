@@ -132,6 +132,7 @@ class ExchangeService:
                 logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
                 self.execute_op(ticker_pair=ticker_pair, op="cancelOrder", order_id=order_id)
                 logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
+
                 return None
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")

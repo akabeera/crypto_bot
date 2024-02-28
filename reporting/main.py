@@ -87,7 +87,10 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
 
     total_market_value = 0
     print("\nOpen Positions\n")
+    print("{:20s} {:23s} {:20s} {:22s} {:25s} {:24s} {:15s} {:15s}".format("symbol", "shares", "avg_price", "profit_pct", "market_value", "bid_price", "total_fees", "num_trades"))
     for symbol, trades in trades_dict.items():
+        if symbol == "VGX/USD":
+            continue 
         ticker_info = exchange_service.execute_op(ticker_pair=symbol, op="fetchTicker")
         if not ticker_info:
             print("{:15s} {:35s} {:4s}".format(symbol, "--", "--"))
@@ -102,9 +105,10 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
         price = ticker_info["bid"]
         shares = avg_position["amount"]
         avg_price = avg_position["price"]
+        total_fees = avg_position["fee"]["cost"]
         market_value = price * shares
         total_market_value += market_value
-        print("{:10s} {:20.9f} ${:20.15f} {:10.6f}% ${:20.15f} {:4d}".format(symbol, shares, avg_price, profit_pct, market_value, len(trades)))
+        print("{:10s} {:20.12f}   ${:20.12f} {:20.12f}%    ${:20.12f}    ${:20.12f}    ${:20.12f} {:10d}".format(symbol, shares, avg_price, profit_pct, market_value, bid_price, total_fees, len(trades)))
         
     print(f"\nTotal Market Value: {total_market_value}")
 

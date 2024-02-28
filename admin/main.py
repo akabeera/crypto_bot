@@ -133,7 +133,7 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
         actions.buy_order_collection = TRADES_COLLECTION
 
         if not actions.can_automatically_reconcile():
-            print(f"actions tally don't match replay orders tally, skipping recon")
+            print(f"actions tally don't match replay orders tally, skipping reconciliation for {ticker_pair}")
             continue
 
         ticker_info = exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
