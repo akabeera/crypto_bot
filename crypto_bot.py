@@ -159,6 +159,10 @@ class CryptoBot:
             if ticker_pair in self.overrides and CONSTANTS.CONFIG_TAKE_PROFITS in self.overrides[ticker_pair]:
                 (take_profit_threshold, take_profit_evaluation_type) = self.init_take_profits_config(self.overrides[ticker_pair][CONSTANTS.CONFIG_TAKE_PROFITS])
 
+            if "bid" not in ticker_info or ticker_info["bid"] is None:
+                logger.error(f"{ticker_pair}: missing or None bid_price, skipping")
+                continue
+
             profitable_positions_to_exit = find_profitable_trades(ticker_pair, 
                                                                   avg_position, 
                                                                   all_positions, 

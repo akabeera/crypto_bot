@@ -74,11 +74,7 @@ def find_profitable_trades(ticker_pair: str,
                            take_profit_evaluation_type: TakeProfitEvaluationType = TakeProfitEvaluationType.INDIVIDUAL_LOTS):
     if not avg_position:
         return None
-    
-    if "bid" not in ticker_info or ticker_info["bid"] is None:
-        logger.error(f"{ticker_pair}: missing or None bid_price, aborting evaluate_profit")
-        return None
-    
+        
     bid_price = ticker_info["bid"]
 
     profitable_positions = []
