@@ -91,7 +91,7 @@
             "amount_per_transaction": 75
         },
         {
-            "tickers": ["FIL/USD", "BTC/USD", "SOL/USD", "MATIC/USD"],
+            "tickers": ["FET/USD", "BTC/USD", "SOL/USD"],
             "amount_per_transaction": 100
         },
         {
@@ -136,7 +136,8 @@
         "XLM",
         "MKR",
         "QNT",
-        "AAVE"
+        "AAVE",
+        "FET"
     ],
     "blacklisted_currencies": []
 }
