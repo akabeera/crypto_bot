@@ -84,7 +84,7 @@
                 }
             ],
             "trade_cooldown_period": 30,
-            "amount_per_transaction": 50
+            "amount_per_transaction": 100
         },
         {
             "tickers": ["AAVE/USD", "DOGE/USD"],
@@ -93,20 +93,6 @@
         {
             "tickers": ["FET/USD", "BTC/USD", "SOL/USD"],
             "amount_per_transaction": 100
-        },
-        {
-            "tickers":["FIL/USD"],
-            "strategies": [
-                {
-                    "name": "RSI",
-                    "priority": 2,
-                    "parameters": {
-                        "overbought_signal_threshold": 70,
-                        "oversold_signal_threshold": 30,
-                        "num_candles_required": 3
-                    }
-                }
-            ]
         }
     ],
     "supported_crypto_currencies": [
