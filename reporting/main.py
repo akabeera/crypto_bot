@@ -70,8 +70,6 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
 
     exchange_config = {
         'exchange_id': "coinbase",
-        'market_order_type_buy': "market",
-        'market_order_type_sell': "limit",
         'limit_order_time_limit': 10,
         'create_market_buy_order_requires_price': False
     }

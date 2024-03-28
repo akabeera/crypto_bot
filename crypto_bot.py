@@ -135,12 +135,17 @@ class CryptoBot:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
 
+            if len(ohlcv) < 4:
+                logger.warning(f"{ticker_pair}: not enough candles, candles len: {len(ohlcv)}, skipping")
+                continue
+
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
 
-            r, c = candles_df.shape
-            if r < 4:
-                logger.warning(f"{ticker_pair}: not enough candles({r}), skipping")
-                continue
+            take_profit_threshold = self.take_profit_threshold
+            take_profit_evaluation_type = self.take_profit_evaluation_type
+
+            if ticker_pair in self.overrides and CONSTANTS.CONFIG_TAKE_PROFITS in self.overrides[ticker_pair]:
+                (take_profit_threshold, take_profit_evaluation_type) = self.init_take_profits_config(self.overrides[ticker_pair][CONSTANTS.CONFIG_TAKE_PROFITS])
 
             ticker_filter = {
                 'symbol': ticker_pair
@@ -150,21 +155,9 @@ class CryptoBot:
 
             ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
             if ticker_info is None:
-                logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
+                logger.error(f"{ticker_pair}: error fetching ticker_info, skipping")
                 continue
             
-            if "bid" not in ticker_info or ticker_info["bid"] is None:
-                logger.error(f"{ticker_pair}: missing or None bid_price, skipping")
-                continue
-
-            take_profit_threshold = self.take_profit_threshold
-            take_profit_evaluation_type = self.take_profit_evaluation_type
-
-            if ticker_pair in self.overrides and CONSTANTS.CONFIG_TAKE_PROFITS in self.overrides[ticker_pair]:
-                (take_profit_threshold, take_profit_evaluation_type) = self.init_take_profits_config(self.overrides[ticker_pair][CONSTANTS.CONFIG_TAKE_PROFITS])
-
-
-
             profitable_positions_to_exit = find_profitable_trades(ticker_pair, 
                                                                   avg_position, 
                                                                   all_positions, 
@@ -224,7 +217,13 @@ class CryptoBot:
             logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
             return None
         
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", total_cost=amount, order_type="buy")
+        params = {
+            'total_cost': amount,
+            'order_type': 'buy',
+            'market_order_type': 'market'
+        }
+        
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", params=params)
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
             return None
@@ -255,7 +254,14 @@ class CryptoBot:
 
         rounded_shares = round_down(shares)
 
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=rounded_shares, price=bid_price, order_type="sell")
+        params = {
+            'order_type': "sell",
+            'market_order_type': 'limit',
+            'shares': rounded_shares,
+            'price': bid_price    
+        }
+
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", params=params)
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute sell order")
             return None

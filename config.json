@@ -7,7 +7,7 @@
     "currency": "USD",
     "inter_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
-    "dry_run": false,
+    "dry_run": true,
     "take_profits": {
         "threshold_percent": 2,
         "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
@@ -20,8 +20,6 @@
     },
     "exchange": {
         "exchange_id": "coinbase",
-        "market_order_type_buy": "market",
-        "market_order_type_sell": "limit",
         "limit_order_time_limit": 10,
         "create_market_buy_order_requires_price": false
     },

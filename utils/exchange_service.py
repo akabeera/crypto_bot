@@ -34,27 +34,24 @@ class ExchangeService:
     def __init__(self, exchange_config):
         self.exchange_client = self._get_exchange(exchange_config)
 
-        self.market_order_type_buy = "market"
-        if "market_order_type_buy" in exchange_config:
-            self.market_order_type_buy = exchange_config["market_order_type_buy"]
-
-        self.market_order_type_sell = "market"
-        if "market_order_type_sell" in exchange_config:
-            self.market_order_type_sell = exchange_config["market_order_type_sell"]
-
         self.limit_order_time_limit = 10
         if "limit_order_time_limit" in exchange_config:
             self.limit_order_time_limit = exchange_config["limit_order_time_limit"]
 
 
-    def execute_op(self, ticker_pair: str, op: str, shares: float = None, price: float = None, total_cost = None, order_type:str = None, order_id: str = None, params = {}):
+    def execute_op(self, ticker_pair: str, op: str, params = {}):
         try:
             if not self.exchange_client.has[op]:
                 logger.warn(f"{ticker_pair}: exchange does not support op: {op}")
                 return None
                         
             if op == "fetchTicker":
-                return self.exchange_client.fetch_ticker(ticker_pair)
+                ticker_info = self.exchange_client.fetch_ticker(ticker_pair)
+                if ticker_info is None or "bid" not in ticker_info or ticker_info["bid"] is None:
+                    logger.warn(f"{ticker_pair}: bid info missing from tickerInfo")
+                    return None
+                return ticker_info
+            
             elif op == "fetchOHLCV":
                 timeframe = "1m"
                 if "timeframe" in params:
@@ -62,25 +59,59 @@ class ExchangeService:
                 if "since" in params:
                     since = params["since"]
                 return self.exchange_client.fetch_ohlcv(ticker_pair)
-            elif op == "fetchOrder":         
+            elif op == "fetchOrder": 
+                if "order_id" not in params or params["order_id"] is None:
+                    logger.error(f"{ticker_pair}: missing or invalid 'order_id' param is fetchOrder")
+                    return None
+                order_id = params["order_id"]
                 order = self.exchange_client.fetch_order(order_id)
                 return order
             elif op == "fetchOrders":
                 return self.exchange_client.fetch_orders(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 500)
-            elif op == "createOrder":                
-                market_order_type = self.market_order_type_buy if order_type == "buy" else self.market_order_type_sell
-
-                if order_type == "buy" and market_order_type == "market":
-                    return self.create_market_buy_order(ticker_pair, total_cost)
-                if order_type == "sell" and market_order_type == "market":
-                    return self.create_market_sell_order(ticker_pair, shares)
-                else:
-                    if price is None:
-                        logger.error(f"{ticker_pair}: unable to execute limit order with empty price")
-                    return self.create_order(ticker_pair, shares, market_order_type, order_type, price)
-         
             elif op == "cancelOrder":
+                 if "order_id" not in params or params["order_id"] is None:
+                    logger.error(f"{ticker_pair}: missing or invalid 'order_id' param is cancelOrder")
+                    return None
+                 order_id = params["order_id"]
                  return self.exchange_client.cancel_order(order_id, ticker_pair)
+            elif op == "createOrder":
+
+                if "order_type" not in params:
+                    logger.error(f"{ticker_pair}: missing 'order_type' param")
+                    return None
+                
+                order_type = params['order_type']
+
+                market_order_type = "market"
+                if "market_order_type" in params:
+                    market_order_type = params["market_order_type"]
+
+                if market_order_type == "market":
+                    if order_type == "buy":
+                        if "total_cost" not in params or params["total_cost"] is None:
+                            logger.error(f"{ticker_pair}: missing or invalid 'total_cost' param for buy order")
+                            return None
+                        total_cost = params["total_cost"]
+                        return self.create_market_buy_order(ticker_pair, total_cost)
+                    if order_type == "sell":
+                        if "shares" not in params or params["shares"] is None:
+                            logger.error(f"{ticker_pair}: missing or invalid 'shares' param for sell order")
+                            return None
+                        shares = params["shares"]
+                        return self.create_market_sell_order(ticker_pair, shares)
+                elif market_order_type == "limit":
+
+                    if "price" not in params or params["price"] is None or "shares" not in params or params["shares"] is None:
+                        logger.error(f"{ticker_pair}: invalid params for limit order, params: {params}")
+                        return None
+
+                    price = params["price"]
+                    shares = params["shares"]
+
+                    return self.create_order(ticker_pair, shares, market_order_type, order_type, price)
+                else:
+                    logger.error(f"{ticker_pair}: invalid market_order_type:{market_order_type}")
+                    return None
             elif op == "fetchMyTrades":
                 return self.exchange_client.fetch_my_trades(ticker_pair, AUG_FIRST_TIMESTAMP_MS, 1000)
             elif op == "fetchTransactions":
@@ -111,6 +142,9 @@ class ExchangeService:
     def create_order(self, ticker_pair: str, shares: float, type: str, side: str, price: float = None):
         order_results = self.exchange_client.create_order(ticker_pair, type, side, shares, price)
         order_id = order_results['info']['order_id']
+        params = {
+            "order_id": order_id
+        }
 
         order = None
         status = order_results['status']
@@ -130,7 +164,7 @@ class ExchangeService:
                     continue
 
                 logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
-                self.execute_op(ticker_pair=ticker_pair, op="cancelOrder", order_id=order_id)
+                self.execute_op(ticker_pair=ticker_pair, op="cancelOrder", params=params)
                 logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
 
                 return None
@@ -138,7 +172,7 @@ class ExchangeService:
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
             time.sleep(4)
-            order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", order_id=order_id)
+            order = self.execute_op(ticker_pair=ticker_pair, op="fetchOrder", params=params)
             if (order == None):
                 return None
             

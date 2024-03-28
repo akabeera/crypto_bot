@@ -26,8 +26,6 @@ mongodb_service = MongoDBService(MONGO_CONNECTION_STRING, DB_NAME)
 
 exchange_config = {
     'exchange_id': "coinbase",
-    'market_order_type_buy': "market",
-    'market_order_type_sell': "limit",
     'limit_order_time_limit': 10,
     'create_market_buy_order_requires_price': False
 }
@@ -38,14 +36,17 @@ def add_buy_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
 
     for order_id in order_list:
-        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        params = {
+            'order_id': order_id
+        }
+        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", params=params)
         if not order:
             print(f"Error fetching order id: {order_id}")
             continue
 
         order_id_filter = {
-                'id': order_id
-            }    
+            'id': order_id
+        }    
         check_order = mongodb_service.query(TRADES_COLLECTION, order_id_filter)
         if len(check_order) > 0:
             print(f"{order_id} already exists in DB, skipping")
@@ -58,14 +59,17 @@ def add_sell_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
 
     for order_id in order_list:
-        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        params = {
+            'order_id': order_id
+        }
+        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", params=params)
         if not order:
             print(f"Error fetching order id: {order_id}")
             continue
 
         order_id_filter = {
-                'id': order_id
-            }    
+            'id': order_id
+        }    
         check_order = mongodb_service.query(SELL_ORDERS_COLLECTION, order_id_filter)
         if len(check_order) > 0:
             print(f"{order_id} already exists in DB, skipping")
@@ -93,8 +97,10 @@ def add_sell_orders(orders: str, ticker_pair: str):
 def get_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
     for order_id in order_list:
-
-        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        params = {
+            'order_id': order_id
+        }
+        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", params=params)
         if not order:
             print(f"Error fetching order id: {order_id}")
             continue
