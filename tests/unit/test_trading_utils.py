@@ -34,31 +34,11 @@ class TestUtils(unittest.TestCase):
 
 
     def test_calculate_profit_percent_loss(self):
-
-        print(Decimal(1).scaleb(-2))
-
-        t1 = Decimal(-0.04).quantize(Decimal(1).scaleb(-2), rounding=ROUND_UP)
-        print(f"t1: {t1}")
-        t2 = Decimal(-0.05).quantize(Decimal(1).scaleb(-2), rounding=ROUND_UP)
-        print(f"t2: {t2}")
-        t3 = Decimal(-0.22).quantize(Decimal(1).scaleb(-2), rounding=ROUND_UP)
-        print(f"t3: {t3}")
-        
-        t4 = Decimal(-0.092314564913).quantize(Decimal(1).scaleb(-12), rounding=ROUND_UP)
-        print(f"t4: {t4}")
-        t5 = Decimal(-0.092314564914).quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
-        print(f"t5: {t5}")
-        t6 = Decimal(-0.09231456491391342377614447500).quantize(Decimal(1).scaleb(-12), rounding=ROUND_UP)
-        print(f"t5: {t6}")
-
-        expected_profit = Decimal(-0.092314564914).quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
+        expected_profit = Decimal('-0.092314564914').quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
         avg_position = ATOM_TRADE
         ticker_info = ATOM_TICKER_INFO
         profit = calculate_profit_percent(avg_position, ticker_info["bid"])
-        print(f"profit: {profit}")
-        profit = profit.quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
-        print(expected_profit)
-        
+        profit = profit.quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)        
         self.assertEqual(profit.normalize(), expected_profit)
 
     def test_calculate_avg_position(self):
