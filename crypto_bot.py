@@ -177,27 +177,14 @@ class CryptoBot:
                                               candles_df, 
                                               self.strategies_overrides)
             
-            self.execute_trade_action(ticker_pair, 
-                                      trade_action, 
-                                      ticker_info, 
-                                      all_positions)    
-                    
+            if trade_action == TradeAction.BUY:
+                logger.info(f"{ticker_pair}: BUY signal triggered")
+                self.handle_buy_order(ticker_pair)    
+            elif trade_action == TradeAction.SELL:
+                logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
+                self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+      
             time.sleep(self.inter_currency_sleep_interval)
-
-    def execute_trade_action(self, 
-                             ticker_pair: str, 
-                             trade_action: TradeAction, 
-                             ticker_info,
-                             all_positions):
-        
-        if trade_action == TradeAction.BUY:
-            logger.info(f"{ticker_pair}: BUY signal triggered")
-            return self.handle_buy_order(ticker_pair)    
-        elif trade_action == TradeAction.SELL:
-            logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
-            return self.handle_sell_order(ticker_pair, ticker_info, all_positions)
-        
-        return None
         
     def handle_buy_order(self, ticker_pair: str):        
         if self.ticker_in_cooldown(ticker_pair):
