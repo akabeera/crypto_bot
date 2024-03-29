@@ -48,6 +48,10 @@ class CryptoBot:
 
         self.supported_crypto_list = list(set(self.crypto_whitelist).difference(self.crypto_blacklist))
 
+        self.dry_run = False
+        if CONSTANTS.CONFIG_DRY_RUN in self.config:
+            self.dry_run = self.config[CONSTANTS.CONFIG_DRY_RUN]
+
         #TODO: Abstract mongodb service into a data_service
         db_config = self.config[CONSTANTS.CONFIG_DB]
         db_type = db_config[CONSTANTS.CONFIG_DB_TYPE] 
@@ -57,11 +61,7 @@ class CryptoBot:
         self.mongodb_service = MongoDBService(db_connection_string, self.mongodb_db_name)
 
         exchange_config = self.config[CONSTANTS.CONFIG_EXCHANGE]
-        self.exchange_service = ExchangeService(exchange_config)
-
-        self.dry_run = False
-        if CONSTANTS.CONFIG_DRY_RUN in self.config:
-            self.dry_run = self.config[CONSTANTS.CONFIG_DRY_RUN]
+        self.exchange_service = ExchangeService(exchange_config, self.dry_run)
 
         self.init()
 
@@ -130,7 +130,7 @@ class CryptoBot:
             idx += 1 
 
             ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())      
-            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchOHLCV")
+            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV)
             if ohlcv == None or len(ohlcv) == 0:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
@@ -153,7 +153,7 @@ class CryptoBot:
             all_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
             avg_position = calculate_avg_position(all_positions) 
 
-            ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
+            ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_TICKER)
             if ticker_info is None:
                 logger.error(f"{ticker_pair}: error fetching ticker_info, skipping")
                 continue
@@ -199,11 +199,7 @@ class CryptoBot:
         
         return None
         
-    def handle_buy_order(self, ticker_pair: str):
-        if self.dry_run:
-            logger.info(f"{ticker_pair}: dry_run enabled, skipping buy order execution")
-            return None
-        
+    def handle_buy_order(self, ticker_pair: str):        
         if self.ticker_in_cooldown(ticker_pair):
             logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
             return None
@@ -218,12 +214,12 @@ class CryptoBot:
             return None
         
         params = {
-            'total_cost': amount,
-            'order_type': 'buy',
-            'market_order_type': 'market'
+            CONSTANTS.PARAM_TOTAL_COST: amount,
+            CONSTANTS.PARAM_ORDER_TYPE: 'buy',
+            CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'market'
         }
         
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", params=params)
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CREATE_ORDER, params=params)
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
             return None
@@ -241,10 +237,6 @@ class CryptoBot:
             return None
         
         bid_price = ticker_info["bid"]
-
-        if self.dry_run:
-            logger.info(f"{ticker_pair}: dry_run enabled, skipping sell order execution")
-            return None
                     
         shares: float = 0.0
         positions_to_delete = []
@@ -255,13 +247,13 @@ class CryptoBot:
         rounded_shares = round_down(shares)
 
         params = {
-            'order_type': "sell",
-            'market_order_type': 'limit',
-            'shares': rounded_shares,
-            'price': bid_price    
+            CONSTANTS.PARAM_ORDER_TYPE: "sell",
+            CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'limit',
+            CONSTANTS.PARAM_SHARES: rounded_shares,
+            CONSTANTS.PARAM_PRICE: bid_price    
         }
 
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", params=params)
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CREATE_ORDER, params=params)
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute sell order")
             return None

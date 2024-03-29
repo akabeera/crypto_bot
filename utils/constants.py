@@ -1,6 +1,8 @@
 from decimal import *
 
 MAX_PRECISION = 12
+AUG_FIRST_TIMESTAMP_MS = 1690891200000
+NUM_ORDERS_LIMIT = 500
 
 ZERO = Decimal(0)
 ONE = Decimal(1)
@@ -17,14 +19,10 @@ DEFAULT_MONGO_OHLCV_DATA_GRANULARITY = "minutes"
 DEFAULT_MONGO_OHLCV_DATA_META_FIELD = "ticker"
 DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD = "timestamp"
 
-
 DEFAULT_TAKE_PROFIT_THRESHOLD = 2
 DEFAULT_TAKE_PROFIT_EVALUATION_TYPE = "AVERAGE"
 
-AUG_FIRST_TIMESTAMP_MS = 1690891200000
-
 CONFIG_OVERRIDES = "overrides"
-
 CONFIG_AMOUNT_PER_TRANSACTION = "amount_per_transaction"
 CONFIG_REINVESTMENT_PERCENT = "reinvestment_percent"
 CONFIG_TRADE_COOLDOWN_PERIOD = "trade_cooldown_period"
@@ -53,6 +51,26 @@ CONFIG_DB_CURRENT_POSITIONS_COLLECTION = "current_positions_collection"
 CONFIG_DB_CLOSED_POSITIONS_COLLECTION = "closed_positions_collection"
 CONFIG_EXCHANGE = "exchange"
 CONFIG_TICKERS = "tickers"
+CONFIG_LIMIT_ORDER_TIME_LIMIT = "limit_order_time_limit"
+CONFIG_CREATE_MARKET_BUY_ORDER_REQUIRES_PRICE = "create_market_buy_order_requires_price"
+
+PARAM_ORDER_ID = "order_id"
+PARAM_ORDER_TYPE = "order_type"
+PARAM_MARKET_ORDER_TYPE = "market_order_type"
+PARAM_TOTAL_COST = "total_cost"
+PARAM_SHARES = "shares"
+PARAM_PRICE = "price"
+PARAM_TIMEFRAME = "timeframe"
+PARAM_SINCE = "since"
+
+OP_FETCH_TICKER = "fetchTicker"
+OP_FETCH_OHLCV = "fetchOHLCV"
+OP_FETCH_ORDER = "fetchOrder"
+OP_FETCH_ORDERS = "fetchOrders"
+OP_CANCEL_ORDER = "cancelOrder"
+OP_CREATE_ORDER = "createOrder"
+OP_FETCH_MY_TRADES = "fetchMyTrades"
+OP_FETCH_TRANSACTIONS = "fetchTransactions"
 
 CONFIG_OVERRIDEABLE_ATTRIBUTES = [
     CONFIG_AMOUNT_PER_TRANSACTION,
