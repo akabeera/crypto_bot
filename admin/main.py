@@ -24,8 +24,8 @@ TRADES_COLLECTION = CONSTANTS.DEFAULT_MONGO_TRADES_COLLECTION
 mongodb_service = MongoDBService(MONGO_CONNECTION_STRING, DB_NAME)
 
 exchange_config = {
-    'exchange_id': "coinbase",
-    'limit_order_num_periods_limit': 10,
+    CONSTANTS.CONFIG_EXCHANGE_ID: "coinbase",
+    CONSTANTS.CONFIG_LIMIT_ORDER_NUM_PERIODS_LIMIT: 10,
     'create_market_buy_order_requires_price': False
 }
 exchange_service = ExchangeService(exchange_config)

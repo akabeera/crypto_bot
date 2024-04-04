@@ -77,32 +77,37 @@ The **config.json**, in your root dir, is the default config file the crypto-bot
 
 |  Name |  Type |  Default | Description  |
 |---|:-:|:-:|---|
-|  * max_spend |  decimal |  -- | The max amount the crypto-bot will trade **per session**.  If any buy signals are triggered when the remaining balance is below the transaction amount, the BUY order will be skipped.    |
-| * amount_per_transaction  |  decimal | --  |  Defines the dollar amount of each trade when a BUY signal is triggered  |
+|  *max_spend |  decimal |  -- | The max amount the crypto-bot will trade **per session**.  If any buy signals are triggered when the remaining balance is below the transaction amount, the BUY order will be skipped.    |
+| *amount_per_transaction  |  decimal | --  |  Defines the dollar amount of each trade when a BUY signal is triggered  |
 |  reinvestment_percent |  decimal | 0 |  After a SELL order, what percentage of proceeds should be used for future trades. Will increase the remaining balance | 
+| take_profits | object | -- | JSON object defining how the crypto-bot should exit positions| 
+| take_profits.threshold_percent | object | 2 | Immediately sell when the profit passes threshold_percent |
+| take_profits.evaluation_type| enum | AVERAGE | The method of how to evaludate positions calculating prodit.  The different methods are: AVERAGE - Calculate profit using average & exits all positions if profit surpasses threshold; INDIVIDUAL_LOTS - Check profit against each lot and exits the positions that surpasses threshold; AVERAGE_THEN_INDIVIDUAL_LOTS - Tries to exits all positions first but falls back on checking individual losts |
 | crypto_currency_sleep_interval  |  decimal | 1  |  Number of seconds to sleep before moving on to next crypto currency on the list denoted by **supported_crypto_currencies**|
 | sleep_interval  |  decimal | 20  | Number of seconds to sleep before starting back at the beginning again.  The bot runs **synchronously** over the list of crypto currencies denoted by the attribute **supported_crypto_currencies** and will sleep sleep_interval seconds before starting again.|
-|  currency |  string |  USD | The currency to trade crypto-currency with.  Your account must be fully funded in the exchange you're using  |
-| * exchange  | object  | --  |  JSON objects configuring exchange |
+|  currency |  string |  USD | The currency to trade crypto-currency with.  Your account must be fully funded with the necessary funds the as the crypto-bot will handle any widthdrawals/deposits |
+| *exchange  | object  | --  |  JSON objects configuring exchange |
 | exchange.exchange_id  | string  | coinbase  |  Defined by [cxxt](https://github.com/ccxt/ccxt).  Currently crypto-bot supports **coinbase** only |
 | exchange.limit_order_period_time_limit  | number  | 4  |  Number of seconds to sleep before the crypto-bot checks status of the limit order |
 | exchange.limit_order_num_periods_limit  | number  | 10  |  Controls how many periods the crypto-bot will poll the status of the limit order. If 0% is filled on the last period, the crypto-bot will cancel the limit order.  If the fill percentage increased since last comparison, the crypto-bot will reset the counter |
-| * mongodb | object | -- | JSON object defining MongoDB parameters | 
-| * mongodb.db_name  | string  | --  | Name of DB in mongoDB  |
-| * mongodb.current_positions_collection  | string  | --  | Name of table to store open positions  |
-| * mongodb.closed_positions_collection  | string  |  -- |  Name of table to store closed positions, also used in the reporting tool to calculate overall performance |
+| *db | object | -- | JSON object defining MongoDB parameters | 
+| db.type| string | mongodb | Defines what kind of DB being used to store trade data.  Currently only supports "mongodb" |
+| *db.db_name  | string  | --  | Name of DB in mongoDB  |
+| *db.current_positions_collection  | string  | --  | Name of table to store open positions  |
+| *db.closed_positions_collection  | string  |  -- |  Name of table to store closed positions, also used in the reporting tool to calculate overall performance |
 | *supported_crypto_currencies  | string[]  |  [] |  List of crypto currencies the bot will trade.  Use tickers when specifying crypto-currency (e.g. BTC, ETH, MATIC, etc) |
-| blacklisted_currencies | string[]  |  [] |  List of crypto currencies to skip |    
+| blacklisted_currencies | string[]  |  [] |  List of crypto currencies to skip evaluation |    
+| strategies | object[] | -- | List of JSON objects describing the various indicators and their parameters to evaluate.  See below for details about each indicator and their specific parameters  |
 
 
-### Strategies  
+### Strategies Config
 Stratgies are defined in the `strategies` attribute of **config.json.**  You define multiple indicators to develop your strategy and the indicators are evaluated based on its priority (defined by the `priority` attribute). If multiple indicators have the same priority then all must return the same action (i.e. BUY, SELL, HOLD) for the bot to perform said action.  If the bot is triggered to take action, the rest of the indicators at lower priorities are skipped. 
 
 
 |  Name  |  Type |  Default |  Description |
 |---|:-:|:-:|---|
-| * name  | string  |  -- |  The name of the indicator.  The name MUST match the list of already implemented indicators.  See [here](https://github.com/akabeera/crypto_bot/blob/main/strategies/strategy_factory.py) for list of supported indicators  |
-| * priority | number  |  -- |  Defines the order of evaluation in relation to other indicators. Lowest priorities evaluates first.  You can have multiple indicators with the same priority |
+| *name  | string  |  -- |  The name of the indicator.  The name MUST match the list of already implemented indicators.  See [here](https://github.com/akabeera/crypto_bot/blob/main/strategies/strategy_factory.py) for list of supported indicators  |
+| *priority | number  |  -- |  Defines the order of evaluation in relation to other indicators. Lowest priorities evaluates first.  You can have multiple indicators with the same priority |
 | prevent_loss | boolean  | True  | Will prevent selling at a loss, even if SELL signal is triggered
 | normalization_factor | number | 100000 | Scale up very small numbers so calculations can be performed with Python's default precision.  Fixes the issue where too small numbers are zero-ed out  (e.g. SHIB prices)  |  
 |  parameters |  Object | --  |  JSON object defining parameters necessary for the specific indicator calculation.  Each indicator have different required parameters, see below for specific indicator parameter details. |
@@ -114,8 +119,8 @@ The Relative Strength Index (RSI) is a momentum oscillator used in technical ana
 
 |  Parameter | Type | Default |  Description |
 | --- |:-:|:-:|---|
-| * overbought_signal_threshold| number | -- | Triggers a SELL signal if RSI goes above this threshold |
-| * oversold_signal_threshold | number |-- | Triggers a BUY signal if RSI falls below this threshold |
+| *overbought_signal_threshold| number | -- | Triggers a SELL signal if RSI goes above this threshold |
+| *oversold_signal_threshold | number |-- | Triggers a BUY signal if RSI falls below this threshold |
 | timeperiod | number | 14 | The amount of most recent periods to use for RSI calculation |
 | num_candles_required | number | 1 | Mininum number of periods requireed to meet thresholds to trigger a signal|  
 
@@ -132,7 +137,14 @@ Bollinger Bands are a technical analysis tool used in trading to identify potent
 |  Parameter | Type | Default |  Description |
 | --- |:-:|:-:|---|  
 | window | number | 20 | Number of time periods to calculate the simple moving average for the middle band and the standard deviation used to calculate the width of the upper and lower bands. A common choice is a 20-period window, which means the middle band is the 20-period simple moving average of the price, and the standard deviation is calculated based on the same 20 periods. Adjusting the window affects the sensitivity of the bands; a shorter window makes the bands more sensitive to price movements, while a longer window makes them less sensitive. |  
-| std_dev | number | 2 | A multiplier (often denoted by K in mathematical formulations) applied to the standard deviation to determine the distance of the Bollinger Bands (upper and lower) from the moving average (the middle band). A common value for this multiplier is 2, which means the upper and lower bands are set 2 standard deviations above and below the moving average, respectively. |
+| std_dev | number | 2 | A multiplier (often denoted by K in mathematical formulations) applied to the standard deviation to determine the distance of the Bollinger Bands (upper and lower) from the moving average (the middle band). A common value for this multiplier is 2, which means the upper and lower bands are set 2 standard deviations above and below the moving average, respectively. |  
+
+**AVERAGE_DOWN**
+Allows you to perform dollar cost averaging by setting a threshold and if the price falls below, it will trigger a BUY signal to reduce your average price
+|  Parameter | Type | Default |  Description |
+| --- |:-:|:-:|---| 
+|threshold_percent| number | 25 | The percentage threshold to BUY if the current profit falls below -(threshold_percent) |
+
 
 **ADAPTIVE_RSI** (Experimental)
 Dynamically shift the overbought and oversold thresholds depending on the recent price movement and momentum
