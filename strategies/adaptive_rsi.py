@@ -8,13 +8,15 @@ from utils.trading import TradeAction
 class AdaptiveRSI(BaseStrategy):
     def __init__(self, config):
         self.priority = config["priority"]
+        self.normalization_factor = 100000
+        if "normalization_factor" in config:
+                self.normalization_factor = config["normalization_factor"]
 
         parameters = config["parameters"]
         self.default_upper_threshold = parameters["default_upper_threshold"]
         self.default_lower_threshold = parameters["default_lower_threshold"]
         self.volatility_factor = parameters["volatility_factor"]
         self.rsi_period = parameters["rsi_period"]
-        self.normalization_factor = parameters["normalization_factor"]
         self.trend_ma_period = parameters["trend_ma_period"]
         self.trend_factor = parameters["trend_factor"]
 

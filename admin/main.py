@@ -25,7 +25,7 @@ mongodb_service = MongoDBService(MONGO_CONNECTION_STRING, DB_NAME)
 
 exchange_config = {
     'exchange_id': "coinbase",
-    'limit_order_time_limit': 10,
+    'limit_order_num_periods_limit': 10,
     'create_market_buy_order_requires_price': False
 }
 exchange_service = ExchangeService(exchange_config)

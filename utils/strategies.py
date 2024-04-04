@@ -7,7 +7,7 @@ from strategies.strategy_factory import strategy_factory
 
 from utils.logger import logger
 
-def init_strategies(config):
+def init_strategies(config) -> dict[int, BaseStrategy]:
 
     strategies: dict[int, BaseStrategy] = dict()
     if CONSTANTS.CONFIG_STRATEGIES not in config:
@@ -40,7 +40,7 @@ def init_strategies(config):
     return strategies
 
 
-def init_strategies_overrides(config):
+def init_strategies_overrides(config) -> dict[str, dict[str, BaseStrategy]]:
 
     strategies_overrides: dict[str, dict[str, BaseStrategy]] = dict()
     if CONSTANTS.CONFIG_OVERRIDES not in config:

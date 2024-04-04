@@ -12,10 +12,18 @@ class RSI(BaseStrategy):
         if "prevent_loss" in config:
             self.prevent_loss = config["prevent_loss"]
 
+        self.normalization_factor = 100000
+        if "normalization_factor" in config:
+                self.normalization_factor = config["normalization_factor"]
+
         parameters = config["parameters"]
         self.overbought_signal_threshold = parameters["overbought_signal_threshold"]
         self.oversold_signal_threshold = parameters["oversold_signal_threshold"]
 
+        self.timeperiod = 14
+        if "timeperiod" in parameters:
+            self.timeperiod = parameters["timeperiod"]
+            
         self.num_candles_required = 1
         if "num_candles_required" in parameters:
             self.num_candles_required = parameters["num_candles_required"]
@@ -25,7 +33,7 @@ class RSI(BaseStrategy):
 
     def eval(self, avg_position, candles_df, ticker_info):
         rsi_key = "RSI"
-        candles_df[rsi_key] = talib.RSI(candles_df['close'] * 100000)
+        candles_df[rsi_key] = talib.RSI(candles_df['close'] * self.normalization_factor, timeperiod=self.timeperiod)
 
         #last_row = candles_df.iloc[-1]
 

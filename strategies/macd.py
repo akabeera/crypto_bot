@@ -10,7 +10,27 @@ class MACD(BaseStrategy):
         self.priority = config["priority"]
         self.prevent_loss = True
         if "prevent_loss" in config:
-            self.prevent_loss = config["prevent_loss"]
+            self.prevent_loss = config["prevent_loss"]  
+
+        self.normalization_factor = 100000
+        if "normalization_factor" in config:
+                self.normalization_factor = config["normalization_factor"]
+
+        self.fastperiod=12
+        self.slowperiod=26 
+        self.signalperiod=9
+        
+        if "parameters" in config:
+            parameters = config["parameters"]
+
+            if "fastperiod" in parameters:
+                self.fastperiod = parameters["fastperiod"]
+
+            if "slowperiod" in parameters:
+                self.slowperiod = parameters["slowperiod"]
+
+            if "signalperiod" in parameters:
+                self.signalperiod = parameters["signalperiod"]
 
         super().__init__(config)
 
@@ -22,7 +42,7 @@ class MACD(BaseStrategy):
         macd_key = "MACD"
         macd_signal_key = "MACD_signal"
 
-        candles_df[macd_key], candles_df[macd_signal_key], _ = talib.MACD(candles_df['close'])
+        candles_df[macd_key], candles_df[macd_signal_key], _ = talib.MACD(candles_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
         
         last_row = candles_df.iloc[-1]
         macd = last_row[macd_key]

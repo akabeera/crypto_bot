@@ -15,9 +15,12 @@ class ExchangeService:
 
     @classmethod
     def _get_exchange(cls, exchange_config):
-        if cls._exchange is None:
-            exchange_id = exchange_config["exchange_id"]
 
+        if cls._exchange is None:
+            exchange_id = "coinbase"
+            if CONSTANTS.CONFIG_EXCHANGE_ID in exchange_config:
+                exchange_id = exchange_config[CONSTANTS.CONFIG_EXCHANGE_ID]
+            
             create_market_buy_order_requires_price = False
             if CONSTANTS.CONFIG_CREATE_MARKET_BUY_ORDER_REQUIRES_PRICE in exchange_config:
                 create_market_buy_order_requires_price = exchange_config[CONSTANTS.CONFIG_CREATE_MARKET_BUY_ORDER_REQUIRES_PRICE]
@@ -34,10 +37,13 @@ class ExchangeService:
     def __init__(self, exchange_config, dry_run=False):
         self.exchange_client = self._get_exchange(exchange_config)
         self.dry_run = dry_run
-        self.limit_order_time_limit = 10
-        if CONSTANTS.CONFIG_LIMIT_ORDER_TIME_LIMIT in exchange_config:
-            self.limit_order_time_limit = exchange_config[CONSTANTS.CONFIG_LIMIT_ORDER_TIME_LIMIT]
+        self.limit_order_num_periods_limit = CONSTANTS.CONFIG_DEFAULT_LIMIT_ORDER_NUM_PERIODS_LIMIT
+        if CONSTANTS.CONFIG_LIMIT_ORDER_NUM_PERIODS_LIMIT in exchange_config:
+            self.limit_order_num_periods_limit = exchange_config[CONSTANTS.CONFIG_LIMIT_ORDER_NUM_PERIODS_LIMIT]
 
+        self.limit_order_period_time_limit = CONSTANTS.CONFIG_DEFAULT_LIMIT_ORDER_PERIOD_TIME_LIMIT
+        if CONSTANTS.CONFIG_LIMIT_ORDER_PERIOD_TIME_LIMIT in exchange_config:
+            self.limit_order_period_time_limit = exchange_config[CONSTANTS.CONFIG_LIMIT_ORDER_PERIOD_TIME_LIMIT]
 
     def execute_op(self, ticker_pair: str, op: str, params = {}):
         try:
@@ -156,7 +162,7 @@ class ExchangeService:
         while (status != 'closed'):
             prev_filled = filled
             
-            if idx == self.limit_order_time_limit:
+            if idx == self.limit_order_num_periods_limit:
 
                 if order is not None:
                     filled = order["filled"]
@@ -174,7 +180,7 @@ class ExchangeService:
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
-            time.sleep(4)
+            time.sleep(self.limit_order_period_time_limit)
             order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
                 return None

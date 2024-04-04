@@ -30,16 +30,31 @@ class CryptoBot:
 
         self.max_spend = Decimal(self.config[CONSTANTS.CONFIG_MAX_SPEND])
         self.amount_per_transaction = Decimal(self.config[CONSTANTS.CONFIG_AMOUNT_PER_TRANSACTION])
-        self.reinvestment_percent = Decimal(self.config[CONSTANTS.CONFIG_REINVESTMENT_PERCENT]/100)
+
+        if CONSTANTS.CONFIG_DB not in self.config:
+            logger.error(f"missing db config, aborting")
+            exit(1)
+
+        self.reinvestment_percent = CONSTANTS.CONFIG_DEFAULT_REINVESTMENT_PERCENT
+        if CONSTANTS.CONFIG_REINVESTMENT_PERCENT in self.config:
+            self.reinvestment_percent = Decimal(self.config[CONSTANTS.CONFIG_REINVESTMENT_PERCENT]/100)
+
         self.remaining_balance = self.max_spend
-        self.limit_order_time_limit = 10
         self.trade_cooldown_period = 10
         if CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD in self.config:
             self.trade_cooldown_period = self.config[CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD]
 
-        self.currency: str = self.config[CONSTANTS.CONFIG_CURRENCY]
-        self.sleep_interval = self.config[CONSTANTS.CONFIG_SLEEP_INTERVAL]
-        self.inter_currency_sleep_interval = self.config[CONSTANTS.CONFIG_INTER_CURRENCY_SLEEP_INTERVAL]
+        self.currency: str = CONSTANTS.CONFIG_DEFAULT_CURRENCY
+        if CONSTANTS.CONFIG_CURRENCY in self.config:
+            self.currency =self.config[CONSTANTS.CONFIG_CURRENCY]
+
+        self.sleep_interval = CONSTANTS.CONFIG_DEFAULT_SLEEP_INTERVAL
+        if CONSTANTS.CONFIG_DEFAULT_SLEEP_INTERVAL in self.config:
+            self.sleep_interval = self.config[CONSTANTS.CONFIG_SLEEP_INTERVAL]
+
+        self.crypto_currency_sleep_interval = CONSTANTS.CONFIG_DEFAULT_CRYPTO_CURRENCY_SLEEP_INTERVAL
+        if CONSTANTS.CONFIG_CRYPTO_CURRENCY_SLEEP_INTERVAL in self.config:
+            self.crypto_currency_sleep_interval = self.config[CONSTANTS.CONFIG_CRYPTO_CURRENCY_SLEEP_INTERVAL]
 
         self.crypto_whitelist = self.config[CONSTANTS.CONFIG_SUPPORTED_CRYPTO_CURRENCIES]
         self.crypto_blacklist = []
@@ -184,7 +199,7 @@ class CryptoBot:
                 logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
                 self.handle_sell_order(ticker_pair, ticker_info, all_positions)
       
-            time.sleep(self.inter_currency_sleep_interval)
+            time.sleep(self.crypto_currency_sleep_interval)
         
     def handle_buy_order(self, ticker_pair: str):        
         if self.ticker_in_cooldown(ticker_pair):
