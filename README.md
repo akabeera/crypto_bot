@@ -104,7 +104,7 @@ Stratgies are defined in the `strategies` attribute of **config.json.**  You def
 | * name  | string  |  -- |  The name of the indicator.  The name MUST match the list of already implemented indicators.  See [here](https://github.com/akabeera/crypto_bot/blob/main/strategies/strategy_factory.py) for list of supported indicators  |
 | * priority | number  |  -- |  Defines the order of evaluation in relation to other indicators. Lowest priorities evaluates first.  You can have multiple indicators with the same priority |
 | prevent_loss | boolean  | True  | Will prevent selling at a loss, even if SELL signal is triggered
-| normalization_factor | number | -- | Scale up very small numbers so calculations can be performed with Python's default precision.  Fixes the issue where too small numbers are zero-ed out  (e.g. SHIB prices)  |  
+| normalization_factor | number | 100000 | Scale up very small numbers so calculations can be performed with Python's default precision.  Fixes the issue where too small numbers are zero-ed out  (e.g. SHIB prices)  |  
 |  parameters |  Object | --  |  JSON object defining parameters necessary for the specific indicator calculation.  Each indicator have different required parameters, see below for specific indicator parameter details. |
 
 **Indicator Parameters**

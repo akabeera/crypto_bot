@@ -8,9 +8,7 @@ from utils.trading import TradeAction
 class AverageDown(BaseStrategy):
 
     def __init__(self, config):
-        self.priority = config["priority"]
         self.threshold_percent = Decimal(-config["parameters"]["threshold_percent"]/100)
-
         super().__init__(config)
 
     def eval(self, avg_position, candles_df, ticker_info):

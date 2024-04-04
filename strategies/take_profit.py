@@ -7,7 +7,6 @@ from utils.trading import TradeAction
 
 class TakeProfit(BaseStrategy):
     def __init__(self, config):
-        self.priority = config["priority"]
         self.threshold_percent = Decimal(config["parameters"]["threshold_percent"]/100)
 
         super().__init__(config)
