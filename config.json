@@ -1,5 +1,5 @@
 {
-    "max_spend": 500,
+    "max_spend": 200,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
@@ -61,7 +61,7 @@
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 25,
+                "threshold_percent": 35,
                 "num_times": 2
             } 
         },
