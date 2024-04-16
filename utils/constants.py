@@ -4,10 +4,10 @@ MAX_PRECISION = 12
 AUG_FIRST_TIMESTAMP_MS = 1690891200000
 NUM_ORDERS_LIMIT = 500
 
-ZERO = Decimal(0)
-ONE = Decimal(1)
-FIVE = Decimal(5)
-ONE_HUNDRED = Decimal(100)
+ZERO = Decimal("0")
+ONE = Decimal("1")
+FIVE = Decimal("5")
+ONE_HUNDRED = Decimal("100")
 QUANTIZING_DECIMAL = ONE.scaleb(-MAX_PRECISION)
 
 DEFAULT_MONGO_DB_NAME = "crypto-bot"

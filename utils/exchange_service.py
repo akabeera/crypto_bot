@@ -2,6 +2,7 @@ import ccxt
 import os
 import time
 from dotenv import load_dotenv
+from decimal import *
 from ccxt import BadSymbol, RequestTimeout, AuthenticationError, NetworkError, ExchangeError
 from utils.logger import logger
 import utils.constants as CONSTANTS
@@ -158,23 +159,29 @@ class ExchangeService:
         order = None
         status = order_results['status']
         idx = 0
-        filled = 0
+        filled = CONSTANTS.ZERO
         while (status != 'closed'):
             prev_filled = filled
             
             if idx == self.limit_order_num_periods_limit:
 
                 if order is not None:
-                    filled = order["filled"]
+                    filled = Decimal(str(order["filled"]))
 
-                if filled > prev_filled:
-                    logger.info(f"{ticker_pair}: order is still being filled, extending time")
-                    idx = 0
-                    continue
+                if filled == CONSTANTS.ZERO:
+                    logger.warn(f"{ticker_pair}: limit order not fulfilled, cancelling order")
+                    self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
 
-                logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
-                self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
-                logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
+                
+                # if filled > prev_filled:
+                #     logger.info(f"{ticker_pair}: order is still being filled, extending time")
+                #     idx = 0
+                #     continue
+
+                # logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
+                # self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
+                # logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
+                
 
                 return None
 
