@@ -6,11 +6,7 @@ from utils.trading import TradeAction
 
 class BollingerBands(BaseStrategy):
     def __init__(self, config):
-        self.priority = config["priority"]
-        self.prevent_loss = True
-        if "prevent_loss" in config:
-            self.prevent_loss = config["prevent_loss"]
-
+        
         parameters = config["parameters"]
         self.window = parameters["window"]
         self.std_dev = parameters["std_dev"]

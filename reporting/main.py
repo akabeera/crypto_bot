@@ -1,4 +1,5 @@
 import os
+import utils.constants as CONSTANTS
 from decimal import *
 
 from dotenv import load_dotenv
@@ -69,10 +70,8 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
     open_positions = mongodb_service.query(table_name)
 
     exchange_config = {
-        'exchange_id': "coinbase",
-        'market_order_type_buy': "market",
-        'market_order_type_sell': "limit",
-        'limit_order_time_limit': 10,
+        CONSTANTS.CONFIG_EXCHANGE_ID: "coinbase",
+        CONSTANTS.CONFIG_LIMIT_ORDER_NUM_PERIODS_LIMIT: 10,
         'create_market_buy_order_requires_price': False
     }
     exchange_service = ExchangeService(exchange_config)
@@ -91,7 +90,7 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
     for symbol, trades in trades_dict.items():
         if symbol == "VGX/USD":
             continue 
-        ticker_info = exchange_service.execute_op(ticker_pair=symbol, op="fetchTicker")
+        ticker_info = exchange_service.execute_op(ticker_pair=symbol, op=CONSTANTS.OP_FETCH_TICKER)
         if not ticker_info:
             print("{:15s} {:35s} {:4s}".format(symbol, "--", "--"))
             continue

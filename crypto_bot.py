@@ -30,16 +30,31 @@ class CryptoBot:
 
         self.max_spend = Decimal(self.config[CONSTANTS.CONFIG_MAX_SPEND])
         self.amount_per_transaction = Decimal(self.config[CONSTANTS.CONFIG_AMOUNT_PER_TRANSACTION])
-        self.reinvestment_percent = Decimal(self.config[CONSTANTS.CONFIG_REINVESTMENT_PERCENT]/100)
+
+        if CONSTANTS.CONFIG_DB not in self.config:
+            logger.error(f"missing db config, aborting")
+            exit(1)
+
+        self.reinvestment_percent = CONSTANTS.CONFIG_DEFAULT_REINVESTMENT_PERCENT
+        if CONSTANTS.CONFIG_REINVESTMENT_PERCENT in self.config:
+            self.reinvestment_percent = Decimal(self.config[CONSTANTS.CONFIG_REINVESTMENT_PERCENT]/100)
+
         self.remaining_balance = self.max_spend
-        self.limit_order_time_limit = 10
         self.trade_cooldown_period = 10
         if CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD in self.config:
             self.trade_cooldown_period = self.config[CONSTANTS.CONFIG_TRADE_COOLDOWN_PERIOD]
 
-        self.currency: str = self.config[CONSTANTS.CONFIG_CURRENCY]
-        self.sleep_interval = self.config[CONSTANTS.CONFIG_SLEEP_INTERVAL]
-        self.inter_currency_sleep_interval = self.config[CONSTANTS.CONFIG_INTER_CURRENCY_SLEEP_INTERVAL]
+        self.currency: str = CONSTANTS.CONFIG_DEFAULT_CURRENCY
+        if CONSTANTS.CONFIG_CURRENCY in self.config:
+            self.currency =self.config[CONSTANTS.CONFIG_CURRENCY]
+
+        self.sleep_interval = CONSTANTS.CONFIG_DEFAULT_SLEEP_INTERVAL
+        if CONSTANTS.CONFIG_DEFAULT_SLEEP_INTERVAL in self.config:
+            self.sleep_interval = self.config[CONSTANTS.CONFIG_SLEEP_INTERVAL]
+
+        self.crypto_currency_sleep_interval = CONSTANTS.CONFIG_DEFAULT_CRYPTO_CURRENCY_SLEEP_INTERVAL
+        if CONSTANTS.CONFIG_CRYPTO_CURRENCY_SLEEP_INTERVAL in self.config:
+            self.crypto_currency_sleep_interval = self.config[CONSTANTS.CONFIG_CRYPTO_CURRENCY_SLEEP_INTERVAL]
 
         self.crypto_whitelist = self.config[CONSTANTS.CONFIG_SUPPORTED_CRYPTO_CURRENCIES]
         self.crypto_blacklist = []
@@ -47,6 +62,10 @@ class CryptoBot:
             self.crypto_blacklist = self.config[CONSTANTS.CONFIG_BLACKLISTED_CRYPTO_CURRENCIES]
 
         self.supported_crypto_list = list(set(self.crypto_whitelist).difference(self.crypto_blacklist))
+
+        self.dry_run = False
+        if CONSTANTS.CONFIG_DRY_RUN in self.config:
+            self.dry_run = self.config[CONSTANTS.CONFIG_DRY_RUN]
 
         #TODO: Abstract mongodb service into a data_service
         db_config = self.config[CONSTANTS.CONFIG_DB]
@@ -57,11 +76,7 @@ class CryptoBot:
         self.mongodb_service = MongoDBService(db_connection_string, self.mongodb_db_name)
 
         exchange_config = self.config[CONSTANTS.CONFIG_EXCHANGE]
-        self.exchange_service = ExchangeService(exchange_config)
-
-        self.dry_run = False
-        if CONSTANTS.CONFIG_DRY_RUN in self.config:
-            self.dry_run = self.config[CONSTANTS.CONFIG_DRY_RUN]
+        self.exchange_service = ExchangeService(exchange_config, self.dry_run)
 
         self.init()
 
@@ -130,32 +145,16 @@ class CryptoBot:
             idx += 1 
 
             ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())      
-            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchOHLCV")
+            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV)
             if ohlcv == None or len(ohlcv) == 0:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
 
+            if len(ohlcv) < 4:
+                logger.warning(f"{ticker_pair}: not enough candles, candles len: {len(ohlcv)}, skipping")
+                continue
+
             candles_df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
-
-            r, c = candles_df.shape
-            if r < 4:
-                logger.warning(f"{ticker_pair}: not enough candles({r}), skipping")
-                continue
-
-            ticker_filter = {
-                'symbol': ticker_pair
-            }
-            all_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
-            avg_position = calculate_avg_position(all_positions) 
-
-            ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
-            if ticker_info is None:
-                logger.error(f"{ticker_pair}: unable to fetch ticker info, skipping")
-                continue
-            
-            if "bid" not in ticker_info or ticker_info["bid"] is None:
-                logger.error(f"{ticker_pair}: missing or None bid_price, skipping")
-                continue
 
             take_profit_threshold = self.take_profit_threshold
             take_profit_evaluation_type = self.take_profit_evaluation_type
@@ -163,8 +162,17 @@ class CryptoBot:
             if ticker_pair in self.overrides and CONSTANTS.CONFIG_TAKE_PROFITS in self.overrides[ticker_pair]:
                 (take_profit_threshold, take_profit_evaluation_type) = self.init_take_profits_config(self.overrides[ticker_pair][CONSTANTS.CONFIG_TAKE_PROFITS])
 
+            ticker_filter = {
+                'symbol': ticker_pair
+            }
+            all_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
+            avg_position = calculate_avg_position(all_positions) 
 
-
+            ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_TICKER)
+            if ticker_info is None:
+                logger.error(f"{ticker_pair}: error fetching ticker_info, skipping")
+                continue
+            
             profitable_positions_to_exit = find_profitable_trades(ticker_pair, 
                                                                   avg_position, 
                                                                   all_positions, 
@@ -184,33 +192,16 @@ class CryptoBot:
                                               candles_df, 
                                               self.strategies_overrides)
             
-            self.execute_trade_action(ticker_pair, 
-                                      trade_action, 
-                                      ticker_info, 
-                                      all_positions)    
-                    
-            time.sleep(self.inter_currency_sleep_interval)
-
-    def execute_trade_action(self, 
-                             ticker_pair: str, 
-                             trade_action: TradeAction, 
-                             ticker_info,
-                             all_positions):
+            if trade_action == TradeAction.BUY:
+                logger.info(f"{ticker_pair}: BUY signal triggered")
+                self.handle_buy_order(ticker_pair)    
+            elif trade_action == TradeAction.SELL:
+                logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
+                self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+      
+            time.sleep(self.crypto_currency_sleep_interval)
         
-        if trade_action == TradeAction.BUY:
-            logger.info(f"{ticker_pair}: BUY signal triggered")
-            return self.handle_buy_order(ticker_pair)    
-        elif trade_action == TradeAction.SELL:
-            logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
-            return self.handle_sell_order(ticker_pair, ticker_info, all_positions)
-        
-        return None
-        
-    def handle_buy_order(self, ticker_pair: str):
-        if self.dry_run:
-            logger.info(f"{ticker_pair}: dry_run enabled, skipping buy order execution")
-            return None
-        
+    def handle_buy_order(self, ticker_pair: str):        
         if self.ticker_in_cooldown(ticker_pair):
             logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
             return None
@@ -224,7 +215,13 @@ class CryptoBot:
             logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
             return None
         
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", total_cost=amount, order_type="buy")
+        params = {
+            CONSTANTS.PARAM_TOTAL_COST: amount,
+            CONSTANTS.PARAM_ORDER_TYPE: 'buy',
+            CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'market'
+        }
+        
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CREATE_ORDER, params=params)
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
             return None
@@ -242,10 +239,6 @@ class CryptoBot:
             return None
         
         bid_price = ticker_info["bid"]
-
-        if self.dry_run:
-            logger.info(f"{ticker_pair}: dry_run enabled, skipping sell order execution")
-            return None
                     
         shares: float = 0.0
         positions_to_delete = []
@@ -255,7 +248,14 @@ class CryptoBot:
 
         rounded_shares = round_down(shares)
 
-        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op="createOrder", shares=rounded_shares, price=bid_price, order_type="sell")
+        params = {
+            CONSTANTS.PARAM_ORDER_TYPE: "sell",
+            CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'limit',
+            CONSTANTS.PARAM_SHARES: rounded_shares,
+            CONSTANTS.PARAM_PRICE: bid_price    
+        }
+
+        order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CREATE_ORDER, params=params)
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute sell order")
             return None

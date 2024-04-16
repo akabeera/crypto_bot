@@ -1,7 +1,7 @@
 # crypto-bot
-A super simple and straight forward bot with a simple way to implement basic strategies via a config file for crypto trading.  Define a list of crypto currencies, and strategies to BUY and SELL said crypto currencies.  The bot iterates over the list of crypto currencies synchronously and execute the appropriate trades.  
+A  simple and straightforward bot with an easy way to implement basic strategies via a config file for crypto trading.  Define a list of crypto currencies, and strategies to trigger when to BUY and SELL said crypto currencies.  The bot iterates over the list of crypto currencies synchronously and execute the appropriate trades.  
 
-Note: The **crypto-bot** is overly optimistic by default and will never SELL at a loss even if a SELL signal is triggered (This can be overriden in the config file). 
+Note: The **crypto-bot** is overly optimistic by default and will NEVER SELL at a loss even if a SELL signal is triggered (This can be overriden in the config file). 
 
 ## Prequisites
 
@@ -12,10 +12,10 @@ Due to some dependency conflicts with TALib, Python 3.10.x is recommended.  I re
 Trades are stored in MongoDB to keep track of your current positions across multiple sessions.  It's also used to calculate your overall performance.  [MongoDB community](https://www.mongodb.com/try/download/community) version will suffice but using any other tier will work as long as you have a connection string
 
 3. TALib Core Libraries  
-The crypto-bot has a dependency on the TA-Lib python library, which will automatically be installed with `pip install`.  BUT installing the python library does NOT install the necessary core TA-Lib libraries.  Please follow the directions [here to install the core TA-Lib libraries](https://github.com/TA-Lib/ta-lib-python#dependencies).  
+The crypto-bot has a dependency on the TA-Lib python library, which will automatically be installed with `pip install`.  BUT installing the python library does NOT install the necessary dependencies for the TAL-Lib library.  The TA-Lib python library requies the core TA-Lib libraries, which you can go [here to install the core TA-Lib libraries](https://github.com/TA-Lib/ta-lib-python#dependencies).  
 
 4. Coinbase API Key  
-Currently, the crypto-bot only supports coinbase exchange but more exchanges will be suppported in the future.  You'll need to create an API key through your coinbase account.  See [here](https://docs.cloud.coinbase.com/sign-in-with-coinbase/docs/api-key-authentication#generating-an-api-key) for instructions.  The below scope should be enabled AND please ensure to enable the specific Crypto Currencies you plan to run.    
+Currently, the crypto-bot only supports Coinbase exchange but more exchanges will be suppported in the future.  You'll need to create an API key through your coinbase account.  See [here](https://docs.cloud.coinbase.com/sign-in-with-coinbase/docs/api-key-authentication#generating-an-api-key) for instructions.  The below scope should be enabled AND please ensure to enable the specific Crypto Currencies you plan to run.    
 
 ``````
 wallet:accounts:read, wallet:buys:create, wallet:buys:read,  
@@ -67,39 +67,96 @@ API_SECRET=<EXCHANGE API_SECRET>
 MONGO_CONNECTION_STRING=<MONGO_CONNECTION_STRING>
 ```
 
-## Running crypto-bot
+## Configuring crypto-bot
 
 ### config.json
-The **config.json** is the default config file the crypto-bot will load. It will defines various parameters and your trading strategy.  See the following table for details:    
+The **config.json**, in your root dir, is the default config file the crypto-bot will load. It will defines various parameters and your trading strategy.  See the following table for details:    
 
 ### General Parameters
+\* Required Fields 
 
 |  Name |  Type |  Default | Description  |
-|:-:|:-:|:-:|---|
-|  max_spend |  decimal |  50 | The max amount the crypto-bot will trade **per session**.  If any buy signals are triggered when the remaining balance is below the transaction amount, the BUY order will be skipped.    |
-| amount_per_transaction  |  decimal | 5  |  Defines the dollar amount on a trade when a BUY signal is triggered  |
-|  reinvestment_percent |  decimal | 0 |  After a SELL order, what percent of proceeds should be used for future trades. Will increase the remaining balance | 
-| sleep_interval  |  decimal | 20  | Number of seconds to sleep.  The bot run **synchronously** iterating over the list of crypto currencies to trade.  Once the bot finishes iterating over the list, define the number of seconds to sleep before starting again  |
-|  currency |  string |  USD | The currency to trade crypto-currency with.  Your account must be fully funded in the exchange you're using manually  |
-| inter_currency_sleep_interval  |  decimal | 1  |  Number of seconds to sleep between each crypto currency |
-| exchange_id  | string  | coinbase  |  Defined by [cxxt](https://github.com/ccxt/ccxt).  Currently only exhange supported is **coinbase** |
-| mongodb.db_name  | string  | crypto-bot  | Name of DB in mongoDB  |
-| mongodb.current_positions_collection  | string  | trades  | Name of table to store open positions  |
-| mongodb.closed_positions_collection  | string  |  sell_orders |  Name of table to store closed positions, also used to calculate overall performance |
-| support_currencies  | string[]  |  [] |  List of crypto currencies the bot will trade.  Use the crypto currency token (e.g. BTC, ETH, MATIC, etc) |
-| blacklisted_currencies | string[]  |  [] |  List of crypto currencies to always skip |    
+|---|:-:|:-:|---|
+|  *max_spend |  decimal |  -- | The max amount the crypto-bot will trade **per session**.  If any buy signals are triggered when the remaining balance is below the transaction amount, the BUY order will be skipped.    |
+| *amount_per_transaction  |  decimal | --  |  Defines the dollar amount of each trade when a BUY signal is triggered  |
+|  reinvestment_percent |  decimal | 0 |  After a SELL order, what percentage of proceeds should be used for future trades. Will increase the remaining balance | 
+| take_profits | object | -- | JSON object defining how the crypto-bot should exit positions| 
+| take_profits.threshold_percent | object | 2 | Immediately sell when the profit passes threshold_percent |
+| take_profits.evaluation_type| enum | AVERAGE | The method of how to evaludate positions calculating prodit.  The different methods are: AVERAGE - Calculate profit using average & exits all positions if profit surpasses threshold; INDIVIDUAL_LOTS - Check profit against each lot and exits the positions that surpasses threshold; AVERAGE_THEN_INDIVIDUAL_LOTS - Tries to exits all positions first but falls back on checking individual losts |
+| crypto_currency_sleep_interval  |  decimal | 1  |  Number of seconds to sleep before moving on to next crypto currency on the list denoted by **supported_crypto_currencies**|
+| sleep_interval  |  decimal | 20  | Number of seconds to sleep before starting back at the beginning again.  The bot runs **synchronously** over the list of crypto currencies denoted by the attribute **supported_crypto_currencies** and will sleep sleep_interval seconds before starting again.|
+|  currency |  string |  USD | The currency to trade crypto-currency with.  Your account must be fully funded with the necessary funds the as the crypto-bot will handle any widthdrawals/deposits |
+| *exchange  | object  | --  |  JSON objects configuring exchange |
+| exchange.exchange_id  | string  | coinbase  |  Defined by [cxxt](https://github.com/ccxt/ccxt).  Currently crypto-bot supports **coinbase** only |
+| exchange.limit_order_period_time_limit  | number  | 4  |  Number of seconds to sleep before the crypto-bot checks status of the limit order |
+| exchange.limit_order_num_periods_limit  | number  | 10  |  Controls how many periods the crypto-bot will poll the status of the limit order. If 0% is filled on the last period, the crypto-bot will cancel the limit order.  If the fill percentage increased since last comparison, the crypto-bot will reset the counter |
+| *db | object | -- | JSON object defining MongoDB parameters | 
+| db.type| string | mongodb | Defines what kind of DB being used to store trade data.  Currently only supports "mongodb" |
+| *db.db_name  | string  | --  | Name of DB in mongoDB  |
+| *db.current_positions_collection  | string  | --  | Name of table to store open positions  |
+| *db.closed_positions_collection  | string  |  -- |  Name of table to store closed positions, also used in the reporting tool to calculate overall performance |
+| *supported_crypto_currencies  | string[]  |  [] |  List of crypto currencies the bot will trade.  Use tickers when specifying crypto-currency (e.g. BTC, ETH, MATIC, etc) |
+| blacklisted_currencies | string[]  |  [] |  List of crypto currencies to skip evaluation |    
+| strategies | object[] | -- | List of JSON objects describing the various indicators and their parameters to evaluate.  See below for details about each indicator and their specific parameters  |
 
 
-### Strategies  
-Stratgies are defined in the **strategies** field of the **config.json**  Defining a strategy is simple, there can be multiple strategies both will evaluate each with the appropriate priority as defined in the strategy JSON.  Each strategy JSON must contain:
+### Strategies Config
+Stratgies are defined in the `strategies` attribute of **config.json.**  You define multiple indicators to develop your strategy and the indicators are evaluated based on its priority (defined by the `priority` attribute). If multiple indicators have the same priority then all must return the same action (i.e. BUY, SELL, HOLD) for the bot to perform said action.  If the bot is triggered to take action, the rest of the indicators at lower priorities are skipped. 
 
 
 |  Name  |  Type |  Default |  Description |
-|:-:|:-:|:-:|---|
-| name  | string  |   |  The name of strategy, typically the name of the indicators such RSI, MACD.  The name MUST match the list of algready implemented indicators.  |
-|  priority | number  |  0 |  Lowest numbers will always take highest priority. This defines the order in which each strategy evaluated.  You can have multiple strategies with the same priority |
-| prevent_loss | boolean  | True  | Will prevent selling at a loss, even if strategy triggers a SELL signal
-|  parameters |  Object |   |  Each strategy will require different parameters to perform its operations.   |    
+|---|:-:|:-:|---|
+| *name  | string  |  -- |  The name of the indicator.  The name MUST match the list of already implemented indicators.  See [here](https://github.com/akabeera/crypto_bot/blob/main/strategies/strategy_factory.py) for list of supported indicators  |
+| *priority | number  |  -- |  Defines the order of evaluation in relation to other indicators. Lowest priorities evaluates first.  You can have multiple indicators with the same priority |
+| prevent_loss | boolean  | True  | Will prevent selling at a loss, even if SELL signal is triggered
+| normalization_factor | number | 100000 | Scale up very small numbers so calculations can be performed with Python's default precision.  Fixes the issue where too small numbers are zero-ed out  (e.g. SHIB prices)  |  
+|  parameters |  Object | --  |  JSON object defining parameters necessary for the specific indicator calculation.  Each indicator have different required parameters, see below for specific indicator parameter details. |
+
+**Indicator Parameters**
+
+**RSI**  
+The Relative Strength Index (RSI) is a momentum oscillator used in technical analysis that measures the speed and change of price movements of a security or market.  The RSI is popular among traders and analysts for identifying overbought or oversold conditions in the price of a stock or other asset, potentially indicating reversals or a weakening trend.  
+
+|  Parameter | Type | Default |  Description |
+| --- |:-:|:-:|---|
+| *overbought_signal_threshold| number | -- | Triggers a SELL signal if RSI goes above this threshold |
+| *oversold_signal_threshold | number |-- | Triggers a BUY signal if RSI falls below this threshold |
+| timeperiod | number | 14 | The amount of most recent periods to use for RSI calculation |
+| num_candles_required | number | 1 | Mininum number of periods requireed to meet thresholds to trigger a signal|  
+
+**MACD**  
+The Moving Average Convergence Divergence (MACD) is a widely used technical analysis indicator that helps to identify momentum trends and potential reversals in the price of an asset. It does this by comparing two moving averages of an asset's price, and it's defined by three key components: the fast period, slow period, and signal period  
+|  Parameter | Type | Default |  Description |
+| --- |:-:|:-:|---|
+| fastperiod | number | 12 | Number of periods to calculate the exponential moving average (EMA) of the asset's price. This faster moving average is more sensitive to recent price movements, making it quicker to signal changes in the asset's momentum  |
+| slowperiod | number | 26 | Number of periods to calculate the exponential moving average (EMA) of the asset's price. This slower moving average smooths out price data over a longer period, making it less sensitive to short-term fluctuations than the fast period. The slow period helps to provide a more stable trend indicator |
+| signalperiod | number | 9 | Number of periods to calculate the exponential moving average of the MACD line.  The MACD line is result of subtracting the `slowperiod` EMA from the `fastperiod` EMA.  When the MACD line crosses above the signal line, it can indicate a bullish momentum, suggesting a potential buying opportunity. Conversely, when the MACD line crosses below the signal line, it can signal bearish momentum, indicating a potential selling opportunity   |  
+
+**Bollinger Bands**  
+Bollinger Bands are a technical analysis tool used in trading to identify potential overbought or oversold conditions in a market, as well as to gauge the volatility of a financial instrument. Bollinger Bands consist of a middle band being an N-period simple moving average (window), an upper band at K times an N-period standard deviation above the middle band, and a lower band at K times an N-period standard deviation below the middle band.
+|  Parameter | Type | Default |  Description |
+| --- |:-:|:-:|---|  
+| window | number | 20 | Number of time periods to calculate the simple moving average for the middle band and the standard deviation used to calculate the width of the upper and lower bands. A common choice is a 20-period window, which means the middle band is the 20-period simple moving average of the price, and the standard deviation is calculated based on the same 20 periods. Adjusting the window affects the sensitivity of the bands; a shorter window makes the bands more sensitive to price movements, while a longer window makes them less sensitive. |  
+| std_dev | number | 2 | A multiplier (often denoted by K in mathematical formulations) applied to the standard deviation to determine the distance of the Bollinger Bands (upper and lower) from the moving average (the middle band). A common value for this multiplier is 2, which means the upper and lower bands are set 2 standard deviations above and below the moving average, respectively. |  
+
+**AVERAGE_DOWN**
+Allows you to perform dollar cost averaging by setting a threshold and if the price falls below, it will trigger a BUY signal to reduce your average price
+|  Parameter | Type | Default |  Description |
+| --- |:-:|:-:|---| 
+|threshold_percent| number | 25 | The percentage threshold to BUY if the current profit falls below -(threshold_percent) |
+
+
+**ADAPTIVE_RSI** (Experimental)
+Dynamically shift the overbought and oversold thresholds depending on the recent price movement and momentum
+|  Parameter | Type | Default |  Description |
+| --- |:-:|:-:|---|  
+| default_upper_threshold | number | 70 | Initial threshold to trigger SELL signal |  
+| default_lower_threshold | number | 30 | Initial threshold to trigger BUY signal |  
+| volatility_factor | number | 1000 | |  
+| rsi_period | number | 14 | |  
+| trend_ma_period | number | 50 |  
+| trend_factor | number | 500 |
+    
 
 
 The strategies will execute with the following heuristics:  
@@ -174,6 +231,11 @@ For EACH crypto currency defined in the **support_currencies** array the crypto 
 5. **RSI**, **MACD**, **BOLLINGER_BANDS**  all have same priorty so ALL three must trigger BUY/SELL, otherwise is NOOP signal is triggered
 6. If all three above triggers BUY/SELL then execute the appropriate order and move on to the next crypto currency  
 
+### Config Overrides
+
+# Admin Utilities
+
+# Reporting Dashboard
 
 # Contributing  
 Anyone is free to submit pull requests to improve the usability of crypto-bot.  Few high priority features still needed are:  
@@ -183,4 +245,4 @@ Anyone is free to submit pull requests to improve the usability of crypto-bot.  
 4. Adding support for other exchanges
 
 # Disclaimer  
-Anyone is free to use the crypto-bot as they like.  But it's the user's responsibility to ensure the bot performs the transactions as expected.  It's recommended users do their own due diligence for strategies they create and to always perform necessary testing before running the crypto-bot in production. 
+Anyone is free to use the crypto-bot as they like.  But it's the user's responsibility to ensure the bot performs the transactions as expected.  It's recommended users do their own due diligence when creating their strategies.  It's important to always perform necessary testing before running the crypto-bot in production.  There's no guarantee the bot is bug free, so it's important to do comprehensive testing before letting the bot execute real trades.  Users can use the dry-run flat to help in testing and confirming expected behavior.    
