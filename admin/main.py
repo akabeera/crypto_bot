@@ -65,7 +65,8 @@ def add_sell_orders(orders: str, ticker_pair: str):
 
         order_id_filter = {
                 'id': order_id
-            }    
+            }
+            
         check_order = mongodb_service.query(SELL_ORDERS_COLLECTION, order_id_filter)
         if len(check_order) > 0:
             print(f"{order_id} already exists in DB, skipping")
@@ -80,16 +81,28 @@ def add_sell_orders(orders: str, ticker_pair: str):
             print(f"no positions found for {ticker_pair} in DB, can't add sell order")
             continue
 
-        sell_order = {
-            "sell_order": order,
-            "closed_positions": positions
-        }
+        filled = order["filled"]
+        amount = order["amount"]
 
-        print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
-        mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
-        mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+        if filled < amount:
+            sell_order = {
+                "sell_order": order,
+                "closed_positions": positions                
+            }
+
+            print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
+            mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
+            mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+        else:
+            sell_order = {
+                "sell_order": order,
+                "closed_positions": positions
+            }
+
+            print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
+            mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
+            mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
         
-
 def get_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
     for order_id in order_list:
