@@ -172,6 +172,7 @@ class ExchangeService:
                     logger.warn(f"{ticker_pair}: limit order not fulfilled, cancelling order")
                     self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
 
+                idx = 0
                 
                 # if filled > prev_filled:
                 #     logger.info(f"{ticker_pair}: order is still being filled, extending time")
@@ -182,7 +183,6 @@ class ExchangeService:
                 # self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
                 # logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
                 
-
                 return None
 
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
