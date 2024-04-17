@@ -205,11 +205,15 @@ class ExchangeService:
         order_results = self.exchange_client.create_market_buy_order(ticker_pair, amount)
         order_id = order_results['info']['order_id']
 
+        params = {
+            "order_id": order_id
+        }
+
         order = None
         status = order_results['status']
         while (status != 'closed'):
             time.sleep(1)
-            order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, order_id=order_id)
+            order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
                 return None
 
@@ -225,11 +229,15 @@ class ExchangeService:
         order_results = self.exchange.create_market_sell_order(ticker_pair, shares)
         order_id = order_results['info']['order_id']
 
+        params = {
+            "order_id": order_id
+        }
+
         order = None
         status = order_results['status']
         while (status != 'closed'):
             time.sleep(1)
-            order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, order_id=order_id)
+            order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
                 return None
 
