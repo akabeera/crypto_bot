@@ -1,6 +1,6 @@
 {
     "max_spend": 100,
-    "amount_per_transaction": 50,
+    "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,

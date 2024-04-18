@@ -183,14 +183,12 @@ class ExchangeService:
                 # self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
                 # logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
                 
-                return None
-
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
             time.sleep(self.limit_order_period_time_limit)
             order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
-                return None
+                logger.warn("{ticker_pair}: something went wrong fetching order_id, retrying")
             
             idx += 1
             status = order['status']

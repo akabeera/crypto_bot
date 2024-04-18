@@ -26,7 +26,7 @@
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
-            "args": ["--ticker=FIL/USD", "--op=add_buy_order", "--orders=dcb1c4bf-afdd-48b3-9195-59c719a15b5c"],
+            "args": ["--ticker=AVAX/USD", "--op=add_buy_order", "--orders=418a7a05-7bee-4c2b-8d10-e5d746e4dd4f"],
             "justMyCode": true
         },
         {
@@ -54,7 +54,7 @@
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
-            "args": ["--ticker=AVAX/USD", "--op=add_sell_order", "--orders=3254bfe4-4e1b-4f7e-a5a5-1d5d3f6477f3"],
+            "args": ["--ticker=ASM/USD", "--op=add_sell_order", "--orders=34c9697b-92b0-437f-84c8-0417aa06dcfb", "--lot_ids=91940594-4039-4756-ae49-492b181f8244,9f270a00-a971-4e4a-9bfd-a5ba05477b64,d8c43269-6fa8-4b5c-8601-1915f168d835"],
             "justMyCode": false
         },
         {

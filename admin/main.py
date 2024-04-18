@@ -54,7 +54,7 @@ def add_buy_orders(orders: str, ticker_pair: str):
         print(f"Inserting order_id {order_id} into {TRADES_COLLECTION} table")
         mongodb_service.insert_one(TRADES_COLLECTION, order)
 
-def add_sell_orders(orders: str, ticker_pair: str):
+def add_sell_orders(orders: str, ticker_pair: str, lot_ids: str):
     order_list = orders.split(",")
 
     for order_id in order_list:
@@ -78,6 +78,12 @@ def add_sell_orders(orders: str, ticker_pair: str):
         positions_filter = {
             "symbol": ticker_pair
         }
+
+        if len(lot_ids) > 0: 
+            lot_ids_list = lot_ids.split(',')
+            positions_filter = {
+                "id": {"$in": lot_ids_list}
+            }
 
         positions = mongodb_service.query(TRADES_COLLECTION, positions_filter)
         if len(positions) == 0:
@@ -104,7 +110,8 @@ def add_sell_orders(orders: str, ticker_pair: str):
 
             print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
             mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
-            mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+            delete_result = mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+            print(f"num deletions from {TRADES_COLLECTION}: {delete_result.deleted_count}")
         
 def get_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
@@ -277,6 +284,7 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--op", help="the operation you want to perform")
     argparser.add_argument("--orders", help="comma separated list of order numbers")
+    argparser.add_argument("--lot_ids", help="comma separated lst of buy orders", default="")
     argparser.add_argument("--ticker_pairs", help="ticker pairs list")
     argparser.add_argument("--dry_run", help="dry run", default="True", type=str)
 
@@ -286,7 +294,7 @@ if __name__ == "__main__":
         if args.op == "add_buy_order":
             add_buy_orders(args.orders, args.ticker_pairs)
         if args.op == "add_sell_order":
-            add_sell_orders(args.orders, args.ticker_pairs)
+            add_sell_orders(args.orders, args.ticker_pairs, args.lot_ids)
         if args.op == "get_orders":
             get_orders(args.orders, args.ticker_pairs)
         if args.op == "recon":
