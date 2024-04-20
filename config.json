@@ -1,11 +1,11 @@
 {
-    "max_spend": 500,
+    "max_spend": 100,
     "amount_per_transaction": 20,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
     "currency": "USD",
-    "inter_currency_sleep_interval": 1,
+    "crypto_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
     "dry_run": false,
     "take_profits": {
@@ -20,9 +20,8 @@
     },
     "exchange": {
         "exchange_id": "coinbase",
-        "market_order_type_buy": "market",
-        "market_order_type_sell": "limit",
-        "limit_order_time_limit": 10,
+        "limit_order_period_time_limit": 4,
+        "limit_order_num_periods_limit": 10,
         "create_market_buy_order_requires_price": false
     },
     "strategies": [
@@ -37,6 +36,7 @@
         {
             "name": "RSI",
             "priority": 2,
+            "normalization_factor": 100000,
             "parameters": {
                 "overbought_signal_threshold": 70,
                 "oversold_signal_threshold": 25,
@@ -47,12 +47,12 @@
             "name": "ADAPTIVE_RSI",
             "priority": 2,
             "enabled": false,
+            "normalization_factor": 100000,
             "parameters": {
                 "default_upper_threshold": 70,
                 "default_lower_threshold": 30,
                 "volatility_factor": 1000,
                 "rsi_period": 14,
-                "normalization_factor": 100000,
                 "trend_ma_period": 50,
                 "trend_factor": 500
             }
@@ -61,14 +61,20 @@
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 25,
+                "threshold_percent": 35,
                 "num_times": 2
             } 
         },
         {
             "name": "MACD",
             "priority": 2,
-            "prevent_loss": true
+            "prevent_loss": true,
+            "normalization_factor": 100000,
+            "parameters": {
+                "fastperiod": 12,
+                "slowperiod": 26,
+                "signalperiod": 9
+            }
         }
     ],
     "overrides": [
@@ -79,29 +85,20 @@
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 35
+                        "threshold_percent": 40
                     }
                 }
             ],
-            "trade_cooldown_period": 30
+            "trade_cooldown_period": 30,
+            "amount_per_transaction": 100
         },
         {
-            "tickers": ["FIL/USD", "AAVE/USD", "SOL/USD", "DOGE/USD"],
+            "tickers": ["AAVE/USD", "DOGE/USD"],
             "amount_per_transaction": 75
         },
         {
-            "tickers":["FIL/USD"],
-            "strategies": [
-                {
-                    "name": "RSI",
-                    "priority": 2,
-                    "parameters": {
-                        "overbought_signal_threshold": 70,
-                        "oversold_signal_threshold": 30,
-                        "num_candles_required": 3
-                    }
-                }
-            ]
+            "tickers": ["FET/USD", "BTC/USD", "SOL/USD"],
+            "amount_per_transaction": 100
         }
     ],
     "supported_crypto_currencies": [
@@ -131,7 +128,8 @@
         "XLM",
         "MKR",
         "QNT",
-        "AAVE"
+        "AAVE",
+        "FET"
     ],
     "blacklisted_currencies": []
 }

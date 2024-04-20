@@ -1,4 +1,5 @@
 import os
+import utils.constants as CONSTANTS
 from decimal import *
 
 from dotenv import load_dotenv
@@ -69,10 +70,8 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
     open_positions = mongodb_service.query(table_name)
 
     exchange_config = {
-        'exchange_id': "coinbase",
-        'market_order_type_buy': "market",
-        'market_order_type_sell': "limit",
-        'limit_order_time_limit': 10,
+        CONSTANTS.CONFIG_EXCHANGE_ID: "coinbase",
+        CONSTANTS.CONFIG_LIMIT_ORDER_NUM_PERIODS_LIMIT: 10,
         'create_market_buy_order_requires_price': False
     }
     exchange_service = ExchangeService(exchange_config)
@@ -87,8 +86,11 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
 
     total_market_value = 0
     print("\nOpen Positions\n")
+    print("{:20s} {:23s} {:20s} {:22s} {:25s} {:24s} {:15s} {:15s}".format("symbol", "shares", "avg_price", "profit_pct", "market_value", "bid_price", "total_fees", "num_trades"))
     for symbol, trades in trades_dict.items():
-        ticker_info = exchange_service.execute_op(ticker_pair=symbol, op="fetchTicker")
+        if symbol == "VGX/USD":
+            continue 
+        ticker_info = exchange_service.execute_op(ticker_pair=symbol, op=CONSTANTS.OP_FETCH_TICKER)
         if not ticker_info:
             print("{:15s} {:35s} {:4s}".format(symbol, "--", "--"))
             continue
@@ -102,9 +104,10 @@ def open_positions_performance(mongo_connection_string, db_name, table_name):
         price = ticker_info["bid"]
         shares = avg_position["amount"]
         avg_price = avg_position["price"]
+        total_fees = avg_position["fee"]["cost"]
         market_value = price * shares
         total_market_value += market_value
-        print("{:10s} {:20.9f} ${:20.15f} {:10.6f}% ${:20.15f} {:4d}".format(symbol, shares, avg_price, profit_pct, market_value, len(trades)))
+        print("{:10s} {:20.12f}   ${:20.12f} {:20.12f}%    ${:20.12f}    ${:20.12f}    ${:20.12f} {:10d}".format(symbol, shares, avg_price, profit_pct, market_value, bid_price, total_fees, len(trades)))
         
     print(f"\nTotal Market Value: {total_market_value}")
 

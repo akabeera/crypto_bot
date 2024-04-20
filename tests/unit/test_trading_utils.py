@@ -34,10 +34,11 @@ class TestUtils(unittest.TestCase):
 
 
     def test_calculate_profit_percent_loss(self):
-        expected_profit = Decimal(-0.0836454017003109).quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
+        expected_profit = Decimal('-0.092314564914').quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
         avg_position = ATOM_TRADE
         ticker_info = ATOM_TICKER_INFO
-        profit = calculate_profit_percent(avg_position, ticker_info["bid"]).quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)
+        profit = calculate_profit_percent(avg_position, ticker_info["bid"])
+        profit = profit.quantize(QUANTIZING_DECIMAL, rounding=ROUND_UP)        
         self.assertEqual(profit.normalize(), expected_profit)
 
     def test_calculate_avg_position(self):

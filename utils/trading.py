@@ -19,7 +19,7 @@ class TakeProfitEvaluationType(Enum):
     AVERAGE_THEN_INDIVIDUAL_LOTS = 2,
     OPTIMIZED = 3
 
-FEE_MULTIPLIER = Decimal(1)
+FEE_MULTIPLIER = Decimal(2)
 
 def round_down(num: float) -> float:
     return float(Decimal(num).quantize(QUANTIZING_DECIMAL, rounding=ROUND_DOWN))
@@ -39,7 +39,7 @@ def calculate_profit_percent(position, bid_price: float) -> Decimal:
 
     # assume fee for selling is the same as buying
     profit_after_fees = profit - (fee * FEE_MULTIPLIER)
-    profit_after_fees_pct = profit_after_fees/(cost + fee)
+    profit_after_fees_pct = profit_after_fees/cost
 
     return profit_after_fees_pct
 
@@ -74,11 +74,7 @@ def find_profitable_trades(ticker_pair: str,
                            take_profit_evaluation_type: TakeProfitEvaluationType = TakeProfitEvaluationType.INDIVIDUAL_LOTS):
     if not avg_position:
         return None
-    
-    if "bid" not in ticker_info or ticker_info["bid"] is None:
-        logger.error(f"{ticker_pair}: missing or None bid_price, aborting evaluate_profit")
-        return None
-    
+        
     bid_price = ticker_info["bid"]
 
     profitable_positions = []

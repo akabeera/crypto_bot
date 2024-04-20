@@ -4,6 +4,8 @@ import pprint
 import time
 import pytz
 
+
+import utils.constants as CONSTANTS 
 from decimal import *
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -11,24 +13,19 @@ from dotenv import load_dotenv
 from utils.exchange_service import ExchangeService
 from utils.mongodb_service import MongoDBService
 from utils.reconciliation import ReconciliationActions, reconcile_with_exchange, apply_reconciliation_to_db
-from utils.constants import DEFAULT_MONGO_OHLCV_DATA_META_FIELD, DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD, DEFAULT_MONGO_OHLCV_DATA_GRANULARITY, DEFAULT_MONGO_DB_NAME, DEFAULT_MONGO_SELL_ORDERS_COLLECTION, DEFAULT_MONGO_TRADES_COLLECTION, DEFAULT_MONGO_OHLCV_DATA_COLLECTION, DEFAULT_MONGO_SNAPSHOTS_COLLECTION, FIVE
-
-
 
 load_dotenv()
 
 MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
-DB_NAME = DEFAULT_MONGO_DB_NAME
-SELL_ORDERS_COLLECTION = DEFAULT_MONGO_SELL_ORDERS_COLLECTION
-TRADES_COLLECTION = DEFAULT_MONGO_TRADES_COLLECTION
+DB_NAME = CONSTANTS.DEFAULT_MONGO_DB_NAME
+SELL_ORDERS_COLLECTION = CONSTANTS.DEFAULT_MONGO_SELL_ORDERS_COLLECTION
+TRADES_COLLECTION = CONSTANTS.DEFAULT_MONGO_TRADES_COLLECTION
 
 mongodb_service = MongoDBService(MONGO_CONNECTION_STRING, DB_NAME)
 
 exchange_config = {
-    'exchange_id': "coinbase",
-    'market_order_type_buy': "market",
-    'market_order_type_sell': "limit",
-    'limit_order_time_limit': 10,
+    CONSTANTS.CONFIG_EXCHANGE_ID: "coinbase",
+    CONSTANTS.CONFIG_LIMIT_ORDER_NUM_PERIODS_LIMIT: 10,
     'create_market_buy_order_requires_price': False
 }
 exchange_service = ExchangeService(exchange_config)
@@ -38,14 +35,17 @@ def add_buy_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
 
     for order_id in order_list:
-        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        params = {
+            CONSTANTS.PARAM_ORDER_ID: order_id
+        }
+        order = exchange_service.execute_op(ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
         if not order:
             print(f"Error fetching order id: {order_id}")
             continue
 
         order_id_filter = {
-                'id': order_id
-            }    
+            'id': order_id
+        }    
         check_order = mongodb_service.query(TRADES_COLLECTION, order_id_filter)
         if len(check_order) > 0:
             print(f"{order_id} already exists in DB, skipping")
@@ -54,18 +54,22 @@ def add_buy_orders(orders: str, ticker_pair: str):
         print(f"Inserting order_id {order_id} into {TRADES_COLLECTION} table")
         mongodb_service.insert_one(TRADES_COLLECTION, order)
 
-def add_sell_orders(orders: str, ticker_pair: str):
+def add_sell_orders(orders: str, ticker_pair: str, lot_ids: str):
     order_list = orders.split(",")
 
     for order_id in order_list:
-        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        params = {
+            CONSTANTS.PARAM_ORDER_ID: order_id
+        }
+        order = exchange_service.execute_op(ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
         if not order:
             print(f"Error fetching order id: {order_id}")
             continue
 
         order_id_filter = {
-                'id': order_id
-            }    
+            'id': order_id
+        }
+            
         check_order = mongodb_service.query(SELL_ORDERS_COLLECTION, order_id_filter)
         if len(check_order) > 0:
             print(f"{order_id} already exists in DB, skipping")
@@ -75,26 +79,47 @@ def add_sell_orders(orders: str, ticker_pair: str):
             "symbol": ticker_pair
         }
 
+        if len(lot_ids) > 0: 
+            lot_ids_list = lot_ids.split(',')
+            positions_filter = {
+                "id": {"$in": lot_ids_list}
+            }
+
         positions = mongodb_service.query(TRADES_COLLECTION, positions_filter)
         if len(positions) == 0:
             print(f"no positions found for {ticker_pair} in DB, can't add sell order")
             continue
 
-        sell_order = {
-            "sell_order": order,
-            "closed_positions": positions
-        }
+        filled = order["filled"]
+        amount = order["amount"]
 
-        print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
-        mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
-        mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+        if filled < amount:
+            sell_order = {
+                "sell_order": order,
+                "closed_positions": positions                
+            }
+
+            print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
+            mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
+            mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+        else:
+            sell_order = {
+                "sell_order": order,
+                "closed_positions": positions
+            }
+
+            print(f"Inserting order_id {order_id} into {SELL_ORDERS_COLLECTION} table")
+            mongodb_service.insert_one(SELL_ORDERS_COLLECTION, sell_order)
+            delete_result = mongodb_service.delete_many(TRADES_COLLECTION, positions_filter)
+            print(f"num deletions from {TRADES_COLLECTION}: {delete_result.deleted_count}")
         
-
 def get_orders(orders: str, ticker_pair: str):
     order_list = orders.split(",")
     for order_id in order_list:
-
-        order = exchange_service.execute_op(ticker_pair, op="fetchOrder", order_id=order_id)
+        params = {
+            CONSTANTS.PARAM_ORDER_ID: order_id
+        }
+        order = exchange_service.execute_op(ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
         if not order:
             print(f"Error fetching order id: {order_id}")
             continue
@@ -110,10 +135,10 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
     if not dry_run:
         print("creating a snapshot of DB")
         collections_to_backup = [
-            DEFAULT_MONGO_SELL_ORDERS_COLLECTION,
-            DEFAULT_MONGO_TRADES_COLLECTION
+            CONSTANTS.DEFAULT_MONGO_SELL_ORDERS_COLLECTION,
+            CONSTANTS.DEFAULT_MONGO_TRADES_COLLECTION
         ]
-        snapshot = mongodb_service.snapshot(DEFAULT_MONGO_SNAPSHOTS_COLLECTION, collections_to_backup, "backup before IOTX reconciliation")
+        snapshot = mongodb_service.snapshot(CONSTANTS.DEFAULT_MONGO_SNAPSHOTS_COLLECTION, collections_to_backup, "backup before IOTX reconciliation")
         if snapshot is None:
             print("An error occurred while backing up, aborting reconciliation")
             return
@@ -121,7 +146,7 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
     for ticker_pair in ticker_pairs:
         print("\n\n")
         print(f"{ticker_pair}")
-        exchange_orders = exchange_service.execute_op(ticker_pair, "fetchOrders")
+        exchange_orders = exchange_service.execute_op(ticker_pair, op=CONSTANTS.OP_FETCH_ORDERS)
         
         if exchange_orders is None:
             print("ERROR: Failed to fetch orders from exchange for {ticker_pair}, aborting")
@@ -133,10 +158,10 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
         actions.buy_order_collection = TRADES_COLLECTION
 
         if not actions.can_automatically_reconcile():
-            print(f"actions tally don't match replay orders tally, skipping recon")
+            print(f"{ticker_pair}: actions tally don't match replay orders tally, skipping reconciliation")
             continue
 
-        ticker_info = exchange_service.execute_op(ticker_pair=ticker_pair, op="fetchTicker")
+        ticker_info = exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_TICKER)
         if (not ticker_info or ticker_info['ask'] is None or ticker_info['bid'] is None):
             print(f"{ticker_pair}: unable to fetch ticker info or missing ask/bid prices, skipping")
             continue
@@ -144,7 +169,7 @@ def reconcile_db_with_exchange(ticker_pairs: list, dry_run: bool):
         bid_price = Decimal(ticker_info['bid'])
         recon_value = bid_price * actions.recon_actions_shares_tally
 
-        if recon_value < FIVE:
+        if recon_value < CONSTANTS.FIVE:
             print(f"{ticker_pair} recon value is only {recon_value}, not worth applying to DB, skipping")
             continue        
         
@@ -189,17 +214,17 @@ def populate_ohlcv_data(ticker_pairs = [], timeframe="1m", since = ""):
         ]
 
     collections_list = mongodb_service.get_collections_names()
-    if DEFAULT_MONGO_OHLCV_DATA_COLLECTION not in collections_list:
+    if CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_COLLECTION not in collections_list:
         print(f"creating ohlcv_data collection")
 
         indexes = [
             [("timestamp", 1)],
-            [(DEFAULT_MONGO_OHLCV_DATA_META_FIELD, 1)]
+            [(CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_META_FIELD, 1)]
         ]
-        mongodb_service.create_collection(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, {
-            "timeField": DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
-            "granularity": DEFAULT_MONGO_OHLCV_DATA_GRANULARITY,
-            "metaField": DEFAULT_MONGO_OHLCV_DATA_META_FIELD
+        mongodb_service.create_collection(CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_COLLECTION, {
+            "timeField": CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
+            "granularity": CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_GRANULARITY,
+            "metaField": CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_META_FIELD
         }, 
         indexes)    
 
@@ -208,19 +233,19 @@ def populate_ohlcv_data(ticker_pairs = [], timeframe="1m", since = ""):
         for ticker_pair in ticker_pairs:
             ohlcv_data = []
 
-            most_recent_doc = mongodb_service.query(collection=DEFAULT_MONGO_OHLCV_DATA_COLLECTION, 
+            most_recent_doc = mongodb_service.query(collection=CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_COLLECTION, 
                                                 filter_dict={"ticker": ticker_pair}, 
-                                                sort_field=DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
+                                                sort_field=CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD,
                                                 limit = 1)
             if len(most_recent_doc) > 0:
-                most_recent_timestamp = most_recent_doc[0][DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD]
+                most_recent_timestamp = most_recent_doc[0][CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_TIME_FIELD]
                 aware_datetime = most_recent_timestamp.replace(tzinfo=ZoneInfo('UTC'))
 
                 #wrapping in a Decimal first because timestamp() returns a .0 decimal even after casting to int()
                 epoch_timestamp = int(Decimal((aware_datetime.timestamp()*1000)))
-                ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV", params={"since": epoch_timestamp})
+                ohlcv = exchange_service.execute_op(ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV, params={"since": epoch_timestamp})
             else:
-                ohlcv = exchange_service.execute_op(ticker_pair, "fetchOHLCV")
+                ohlcv = exchange_service.execute_op(ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV)
 
             if ohlcv is None:
                 print(f"{ticker_pair}: error fetching ohlcv, skipping")
@@ -228,7 +253,7 @@ def populate_ohlcv_data(ticker_pairs = [], timeframe="1m", since = ""):
 
             for candle in ohlcv:
                 timestamp = datetime.fromtimestamp(candle[0]/1000, timezone.utc)
-                candle_entries = mongodb_service.query(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, {"ticker": ticker_pair, "timestamp": timestamp})
+                candle_entries = mongodb_service.query(CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_COLLECTION, {"ticker": ticker_pair, "timestamp": timestamp})
                 if len(candle_entries) > 0:
                     continue
 
@@ -239,14 +264,14 @@ def populate_ohlcv_data(ticker_pairs = [], timeframe="1m", since = ""):
                     "low": candle[3],
                     "close": candle[4],
                     "volume": candle[5],
-                    DEFAULT_MONGO_OHLCV_DATA_META_FIELD: ticker_pair
+                    CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_META_FIELD: ticker_pair
                 }
 
                 ohlcv_data.append(entry)
 
             print(f"{ticker_pair}: inserting {len(ohlcv_data)} records")
             if len(ohlcv_data) > 0:
-                mongodb_service.insert_many(DEFAULT_MONGO_OHLCV_DATA_COLLECTION, ohlcv_data)
+                mongodb_service.insert_many(CONSTANTS.DEFAULT_MONGO_OHLCV_DATA_COLLECTION, ohlcv_data)
 
             time.sleep(1)
 
@@ -259,6 +284,7 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--op", help="the operation you want to perform")
     argparser.add_argument("--orders", help="comma separated list of order numbers")
+    argparser.add_argument("--lot_ids", help="comma separated lst of buy orders", default="")
     argparser.add_argument("--ticker_pairs", help="ticker pairs list")
     argparser.add_argument("--dry_run", help="dry run", default="True", type=str)
 
@@ -268,7 +294,7 @@ if __name__ == "__main__":
         if args.op == "add_buy_order":
             add_buy_orders(args.orders, args.ticker_pairs)
         if args.op == "add_sell_order":
-            add_sell_orders(args.orders, args.ticker_pairs)
+            add_sell_orders(args.orders, args.ticker_pairs, args.lot_ids)
         if args.op == "get_orders":
             get_orders(args.orders, args.ticker_pairs)
         if args.op == "recon":
