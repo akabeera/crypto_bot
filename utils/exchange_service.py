@@ -171,6 +171,7 @@ class ExchangeService:
                 if filled == CONSTANTS.ZERO:
                     logger.warn(f"{ticker_pair}: limit order not fulfilled, cancelling order")
                     self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
+                    return None
 
                 idx = 0
                 
@@ -189,6 +190,7 @@ class ExchangeService:
             order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
                 logger.warn("{ticker_pair}: something went wrong fetching order_id, retrying")
+                continue
             
             idx += 1
             status = order['status']
