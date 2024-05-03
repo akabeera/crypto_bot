@@ -1,6 +1,6 @@
 {
-    "max_spend": 100,
-    "amount_per_transaction": 20,
+    "max_spend": 0,
+    "amount_per_transaction": 10,
     "reinvestment_percent": 100,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
@@ -61,7 +61,7 @@
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 35,
+                "threshold_percent": 40,
                 "num_times": 2
             } 
         },
@@ -85,7 +85,7 @@
                     "name": "AVERAGE_DOWN",
                     "priority": 2,
                     "parameters": {
-                        "threshold_percent": 40
+                        "threshold_percent": 50
                     }
                 }
             ],
