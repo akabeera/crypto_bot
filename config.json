@@ -7,7 +7,7 @@
     "currency": "USD",
     "crypto_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
-    "dry_run": false,
+    "dry_run": true,
     "take_profits": {
         "threshold_percent": 2,
         "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
@@ -120,7 +120,6 @@
         "AMP",
         "SHIB",
         "COMP",
-        "ATOM",
         "IOTX",
         "BTC",
         "ADA",
