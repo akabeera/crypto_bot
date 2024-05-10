@@ -66,33 +66,70 @@ if __name__ == "__main__":
                 #print (f"{ticker}: not enouch candles: {len(ohlcvs)}, skipping")
                 continue
             
-            lowest_pct_diff = 0
+            
+            prev_price = 0
+            decreasing_count = 0
+            biggest_decrease = 0
+            num_times = 0
+            total = 0
+            for idx, ohlcv in enumerate(ohlcvs):
+                if idx == 0:
+                    prev_price = ohlcv[4]
+                    continue
+
+                curr_price = ohlcv[4]
+                if curr_price < prev_price:
+                    decreasing_count +=1
+                else:
+                    if decreasing_count > biggest_decrease:
+                        biggest_decrease = decreasing_count
+                        decreasing_count = 0
+                    
+                    total += decreasing_count
+                    num_times += 1
+                    
+                prev_price = curr_price
+
+            avg_step_count = total/num_times
+            print(f"{ticker}: decreasing count: {biggest_decrease}, avg count: {avg_step_count}")
+
+            num_steps = 0
             for idx, ohlcv in reversed(list(enumerate(ohlcvs))):
-                close = ohlcv[4]
-                pct_diff = (ask - close)/bid
-                if pct_diff < lowest_pct_diff:
-                    lowest_pct_diff = pct_diff
-                if pct_diff < buy_pct_threshold:
-                    print(f"{ticker}: buy at idx: {idx}, pct_dif: {pct_diff}, timestamp: {ohlcv[0]}")
-                    if ticker in orders:
-                        print(f"{ticker}: WARNING already have positing, abort buying")
-                    else:
-                        if balance >= transaction_amount:
-                            fee = transaction_amount * fee_pct
-                            orders[ticker] = {
-                                'ticker': ticker,
-                                'price': ask,
-                                'fee': fee,
-                                'shares': ((transaction_amount-fee)/ask)
-                            }
+                closing_price = ohlcv[4]
+                if idx == len(ohlcvs) - 1:
+                    prev_price = closing_price
+                    continue
+            
+                curr_price = closing_price
+                if curr_price >= prev_price:
 
-                            balance -= transaction_amount
-                            print(f"{ticker}: remaining balance: {balance}")
-                        else:
-                            print(f"{ticker}: WARNING: insufficient balance")
+                    num_steps += 1
+                    prev_price = curr_price
+
+                    if num_steps >= avg_step_count:
+                        pct_diff = (ask - closing_price)/ask
+                        if pct_diff < buy_pct_threshold:
+                            print(f"{ticker}: buy at idx: {idx}, pct_dif: {pct_diff}, timestamp: {ohlcv[0]}")
+                            if ticker in orders:
+                                print(f"{ticker}: WARNING already have positing, abort buying")
+                            else:
+                                if balance >= transaction_amount:
+                                    fee = transaction_amount * fee_pct
+                                    orders[ticker] = {
+                                        'ticker': ticker,
+                                        'price': ask,
+                                        'fee': fee,
+                                        'shares': ((transaction_amount-fee)/ask)
+                                    }
+
+                                    balance -= transaction_amount
+                                    print(f"{ticker}: remaining balance: {balance}")
+                                else:
+                                    print(f"{ticker}: WARNING: insufficient balance")
+                            break
+                else:
                     break
-
-            #print(f"{ticker}: lowest pct diff: {lowest_pct_diff}")
+       
             time.sleep(5)
 
         print(f"profit so far: {profit}")
