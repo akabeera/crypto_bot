@@ -1,7 +1,7 @@
 {
-    "max_spend": 0,
+    "max_spend": 200,
     "amount_per_transaction": 10,
-    "reinvestment_percent": 100,
+    "reinvestment_percent": 50,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
     "currency": "USD",
@@ -120,7 +120,6 @@
         "AMP",
         "SHIB",
         "COMP",
-        "ATOM",
         "IOTX",
         "BTC",
         "ADA",
