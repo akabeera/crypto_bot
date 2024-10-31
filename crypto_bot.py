@@ -194,14 +194,14 @@ class CryptoBot:
             
             if trade_action == TradeAction.BUY:
                 logger.info(f"{ticker_pair}: BUY signal triggered")
-                self.handle_buy_order(ticker_pair)    
+                self.handle_buy_order(ticker_pair, ticker_info)    
             elif trade_action == TradeAction.SELL:
                 logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
                 self.handle_sell_order(ticker_pair, ticker_info, all_positions)
       
             time.sleep(self.crypto_currency_sleep_interval)
         
-    def handle_buy_order(self, ticker_pair: str):        
+    def handle_buy_order(self, ticker_pair: str, ticker_info = None):        
         if self.ticker_in_cooldown(ticker_pair):
             logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
             return None
@@ -215,11 +215,31 @@ class CryptoBot:
             logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
             return None
         
-        params = {
-            CONSTANTS.PARAM_TOTAL_COST: amount,
-            CONSTANTS.PARAM_ORDER_TYPE: 'buy',
-            CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'market'
-        }
+        params = None
+        if ticker_pair == "SNX/USD":
+            return None
+        
+            if ticker_info is None or "ask" not in ticker_info:
+                return None
+
+            ask_price = Decimal(ticker_info["ask"])
+            shares = float(amount / ask_price)
+            rounded_shares = round_down(shares)
+            
+            params = {
+                CONSTANTS.PARAM_ORDER_TYPE: "buy",
+                CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'limit',
+                CONSTANTS.PARAM_SHARES: rounded_shares,
+                CONSTANTS.PARAM_PRICE: ask_price   
+            }
+
+        else:
+
+            params = {
+                CONSTANTS.PARAM_TOTAL_COST: amount,
+                CONSTANTS.PARAM_ORDER_TYPE: 'buy',
+                CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'market'
+            }
         
         order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CREATE_ORDER, params=params)
         if not order:

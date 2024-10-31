@@ -26,7 +26,7 @@
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
-            "args": ["--ticker=AVAX/USD", "--op=add_buy_order", "--orders=418a7a05-7bee-4c2b-8d10-e5d746e4dd4f"],
+            "args": ["--ticker=ATOM/USD", "--op=add_buy_order", "--orders=556253c5-8e11-455a-8e1a-74b8507083f6"],
             "justMyCode": true
         },
         {

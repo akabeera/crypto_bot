@@ -1,6 +1,6 @@
 {
-    "max_spend": 200,
-    "amount_per_transaction": 10,
+    "max_spend": 100,
+    "amount_per_transaction": 20,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
@@ -61,7 +61,7 @@
             "name": "AVERAGE_DOWN",
             "priority": 1,
             "parameters": {
-                "threshold_percent": 40,
+                "threshold_percent": 60,
                 "num_times": 2
             } 
         },
@@ -80,26 +80,7 @@
     "overrides": [
         {
             "tickers":["ASM/USD"],
-            "strategies": [
-                {
-                    "name": "AVERAGE_DOWN",
-                    "priority": 2,
-                    "parameters": {
-                        "threshold_percent": 50
-                    }
-                }
-            ],
-            "trade_cooldown_period": 30,
-            "amount_per_transaction": 100
-        },
-        {
-            "tickers": ["AAVE/USD", "DOGE/USD"],
-            "amount_per_transaction": 75
-        },
-        {
-            "tickers": ["FET/USD", "BTC/USD", "SOL/USD"],
-            "amount_per_transaction": 100
-        }
+            "trade_cooldown_period": 30        }
     ],
     "supported_crypto_currencies": [
         "MATIC",
@@ -130,5 +111,5 @@
         "AAVE",
         "FET"
     ],
-    "blacklisted_currencies": []
+    "blacklisted_currencies": ["BNT"]
 }
