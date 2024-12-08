@@ -65,7 +65,7 @@ class ExchangeService:
                     timeframe = params[CONSTANTS.PARAM_TIMEFRAME]
                 if CONSTANTS.PARAM_SINCE in params:
                     since = params[CONSTANTS.PARAM_SINCE]
-                return self.exchange_client.fetch_ohlcv(ticker_pair)
+                return self.exchange_client.fetch_ohlcv(ticker_pair, timeframe)
             elif op == CONSTANTS.OP_FETCH_ORDER: 
                 if CONSTANTS.PARAM_ORDER_ID not in params or params[CONSTANTS.PARAM_ORDER_ID] is None:
                     logger.error(f"{ticker_pair}: missing or invalid 'order_id' param is fetchOrder")

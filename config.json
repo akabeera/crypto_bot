@@ -1,6 +1,6 @@
 {
     "max_spend": 100,
-    "amount_per_transaction": 20,
+    "amount_per_transaction": 5,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
@@ -39,7 +39,7 @@
             "normalization_factor": 100000,
             "parameters": {
                 "overbought_signal_threshold": 70,
-                "oversold_signal_threshold": 25,
+                "oversold_signal_threshold": 30,
                 "num_candles_required": 3
             }
         },
@@ -80,7 +80,8 @@
     "overrides": [
         {
             "tickers":["ASM/USD"],
-            "trade_cooldown_period": 30        }
+            "trade_cooldown_period": 30        
+        }
     ],
     "supported_crypto_currencies": [
         "MATIC",
@@ -91,7 +92,6 @@
         "SOL",
         "MANA",
         "OXT",
-        "SNX",
         "AVAX",
         "DOGE",
         "ICP",
@@ -109,7 +109,8 @@
         "MKR",
         "QNT",
         "AAVE",
-        "FET"
+        "FET",
+        "XRP"
     ],
     "blacklisted_currencies": ["BNT"]
 }
