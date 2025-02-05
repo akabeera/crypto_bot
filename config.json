@@ -1,15 +1,15 @@
 {
-    "max_spend": 100,
-    "amount_per_transaction": 5,
+    "max_spend": 400,
+    "amount_per_transaction": 20,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
-    "trade_cooldown_period": 20,
+    "trade_cooldown_period": 10,
     "currency": "USD",
     "crypto_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
     "dry_run": false,
     "take_profits": {
-        "threshold_percent": 2,
+        "threshold_percent": 50,
         "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
     },
     "db":{

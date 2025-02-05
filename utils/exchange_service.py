@@ -211,10 +211,15 @@ class ExchangeService:
 
         order = None
         status = order_results['status']
+        num_retries = 3
+        curr_retry = 0
         while (status != 'closed'):
             time.sleep(1)
             order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
+                if curr_retry < num_retries:
+                    curr_retry += 1
+                    continue
                 return None
 
             status = order['status']
