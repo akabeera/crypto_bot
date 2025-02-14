@@ -9,7 +9,7 @@ import utils.constants as CONSTANTS
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
+API_SECRET = os.getenv('API_SECRET').replace('\\n', '\n')
 
 class ExchangeService:
     _exchange = None

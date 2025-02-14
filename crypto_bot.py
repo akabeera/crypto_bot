@@ -17,8 +17,6 @@ from utils.logger import logger
 load_dotenv()
 
 CONFIG_FILE = 'config.json'
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
 
 class CryptoBot:
 
@@ -196,8 +194,10 @@ class CryptoBot:
                 logger.info(f"{ticker_pair}: BUY signal triggered")
                 self.handle_buy_order(ticker_pair, ticker_info)    
             elif trade_action == TradeAction.SELL:
-                logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
-                self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+                logger.info(f'{ticker_pair}: SELL signal triggered but skipping selling until profit thresholds are met.')
+
+                # logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
+                # self.handle_sell_order(ticker_pair, ticker_info, all_positions)
       
             time.sleep(self.crypto_currency_sleep_interval)
         
