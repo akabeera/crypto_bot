@@ -7,11 +7,12 @@ from decimal import *
 from dotenv import load_dotenv
 
 from strategies.base_strategy import BaseStrategy
-from strategies.strategy_factory import strategy_factory
-from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_profit_percent, calculate_avg_position, round_down
+from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_avg_position, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
-from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
+# from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
+from utils.strategies_enhanced import execute_strategies, init_strategies, init_strategies_overrides
+
 from utils.logger import logger
 
 load_dotenv()
