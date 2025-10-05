@@ -91,7 +91,7 @@ if __name__ == "__main__":
                 prev_price = curr_price
 
             avg_step_count = total/num_times
-            print(f"{ticker}: decreasing count: {biggest_decrease}, avg count: {avg_step_count}")
+            print(f"{ticker}: largest decreasing count: {biggest_decrease}, avg count: {avg_step_count}")
 
             num_steps = 0
             for idx, ohlcv in reversed(list(enumerate(ohlcvs))):
