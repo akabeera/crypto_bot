@@ -1,0 +1,184 @@
+{
+    "max_spend": 250,
+    "amount_per_transaction": 5,
+    "reinvestment_percent": 50,
+    "sleep_interval": 1,
+    "trade_cooldown_period": 20,
+    "currency": "USD",
+    "crypto_currency_sleep_interval": 1,
+    "exchange_id": "coinbase",
+    "dry_run": false,
+    "take_profits": {
+        "threshold_percent": 10,
+        "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
+    },
+    "db":{
+        "db_type": "mongodb",
+        "db_name": "crypto-bot",
+        "current_positions_collection": "trades",
+        "closed_positions_collection" : "sell_orders"
+    },
+    "exchange": {
+        "exchange_id": "coinbase",
+        "limit_order_period_time_limit": 4,
+        "limit_order_num_periods_limit": 10,
+        "create_market_buy_order_requires_price": false
+    },
+    "strategies": [
+        {
+            "name": "VOLATILITY_ADJUSTED",
+            "priority": 0,
+            "enabled": true,
+            "normalization_factor": 1,
+            "parameters": {
+                "atr_period": 14,
+                "high_volatility_pct": 5,
+                "low_volatility_pct": 2,
+                "signal_mode": "context"
+            },
+            "_comment": "Priority 0 runs first to calculate volatility context for other strategies"
+        },
+        {
+            "name": "DYNAMIC_TRAILING_STOP",
+            "priority": 1,
+            "enabled": true,
+            "prevent_loss": false,
+            "normalization_factor": 1,
+            "parameters": {
+                "activation_percent": 8,
+                "trail_percent": 4,
+                "absolute_take_profit": 20
+            },
+            "_comment": "Priority 1: Check for take profit conditions first (before buying more)"
+        },
+        {
+            "name": "AVERAGE_DOWN",
+            "priority": 1,
+            "parameters": {
+                "threshold_percent": 60,
+                "num_times": 2
+            },
+            "_comment": "Priority 1: Average down on losing positions"
+        },
+        {
+            "name": "PRICE_MOMENTUM",
+            "priority": 2,
+            "enabled": true,
+            "normalization_factor": 1,
+            "parameters": {
+                "min_drop_percent": 7,
+                "lookback_candles": 3,
+                "rsi_max_threshold": 45,
+                "volume_confirmation_multiplier": 1.2
+            },
+            "_comment": "Priority 2: Catch opportunistic dips that indicators miss"
+        },
+        {
+            "name": "BOLLINGER_BANDS",
+            "priority": 2,
+            "parameters": {
+                "window": 20,
+                "std_dev": 2
+            },
+            "_comment": "Priority 2: Technical indicator strategies"
+        },
+        {
+            "name": "RSI",
+            "priority": 2,
+            "normalization_factor": 100000,
+            "parameters": {
+                "overbought_signal_threshold": 70,
+                "oversold_signal_threshold": 30,
+                "num_candles_required": 3
+            },
+            "_comment": "Priority 2: RSI with confirmation candles"
+        },
+        {
+            "name": "ADAPTIVE_RSI",
+            "priority": 2,
+            "enabled": false,
+            "normalization_factor": 100000,
+            "parameters": {
+                "default_upper_threshold": 70,
+                "default_lower_threshold": 30,
+                "volatility_factor": 1000,
+                "rsi_period": 14,
+                "trend_ma_period": 50,
+                "trend_factor": 500
+            },
+            "_comment": "Alternative to regular RSI - enable one or the other"
+        },
+        {
+            "name": "MACD",
+            "priority": 2,
+            "prevent_loss": true,
+            "normalization_factor": 100000,
+            "parameters": {
+                "fastperiod": 12,
+                "slowperiod": 26,
+                "signalperiod": 9
+            },
+            "_comment": "Priority 2: MACD crossover strategy"
+        }
+    ],
+    "overrides": [
+        {
+            "tickers": ["ASM/USD"],
+            "amount_per_transaction": 10
+        },
+        {
+            "tickers": ["BNT/USD"],
+            "take_profits": {
+                "threshold_percent": 5,
+                "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
+            }
+        },
+        {
+            "_comment": "Example: Different trailing stop settings for high-volatility coins",
+            "tickers": ["SHIB/USD", "DOGE/USD"],
+            "strategies": [
+                {
+                    "name": "DYNAMIC_TRAILING_STOP",
+                    "priority": 1,
+                    "enabled": true,
+                    "parameters": {
+                        "activation_percent": 10,
+                        "trail_percent": 6,
+                        "absolute_take_profit": 25
+                    }
+                }
+            ]
+        }
+    ],
+    "supported_crypto_currencies": [
+        "MATIC",
+        "LPT",
+        "WCFG",
+        "BNT",
+        "ATOM",
+        "SOL",
+        "MANA",
+        "OXT",
+        "AVAX",
+        "DOGE",
+        "ICP",
+        "FIL",
+        "ASM",
+        "DOT",
+        "AMP",
+        "SHIB",
+        "COMP",
+        "IOTX",
+        "BTC",
+        "ADA",
+        "LINK",
+        "XLM",
+        "MKR",
+        "QNT",
+        "AAVE",
+        "FET",
+        "XRP"
+    ],
+    "blacklisted_currencies": ["BNT"]
+}
+
