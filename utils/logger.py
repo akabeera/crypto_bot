@@ -26,4 +26,6 @@ def configureLogger(logLevel: str):
 
     logging.getLogger().setLevel(numeric_level)
 
-configureLogger("INFO")
+# Configure logger with level from environment variable, default to INFO
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+configureLogger(LOG_LEVEL)
