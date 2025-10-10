@@ -129,36 +129,37 @@ def execute_strategies_scoring(ticker_pair: str,
             # Update scores based on action
             if curr_action == TradeAction.BUY:
                 buy_score += weight
-                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight}) → BUY (+{weight})")
+                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight}) -> BUY (+{weight})")
             elif curr_action == TradeAction.SELL:
                 sell_score += weight
-                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight}) → SELL (+{weight})")
+                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight}) -> SELL (+{weight})")
             elif curr_action == TradeAction.HOLD:
                 hold_lock = True
-                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}) → HOLD (lock activated)")
+                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}) -> HOLD (lock activated)")
             else:  # NOOP
-                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}) → NOOP")
+                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}) -> NOOP")
     
     # Decision logic
     logger.debug(f"{ticker_pair}: Score Summary - BUY: {buy_score}, SELL: {sell_score}, HOLD_LOCK: {hold_lock}")
-    
-    # If HOLD is signaled, respect it (prevents selling at loss)
-    if hold_lock:
-        if sell_score > 0:
-            logger.info(f"{ticker_pair}: HOLD lock prevents SELL (sell_score: {sell_score})")
-        return TradeAction.HOLD
     
     # Thresholds for action (can be tuned)
     # Priority 1 strategy alone can trigger (weight=3)
     # Two Priority 2 strategies can trigger (weight=2*2=4)
     action_threshold = 3
     
+    # Check BUY signals (HOLD lock doesn't block buys!)
     if buy_score >= action_threshold and buy_score > sell_score:
         logger.info(f"{ticker_pair}: BUY signal triggered (score: {buy_score} vs sell: {sell_score})")
         return TradeAction.BUY
-    elif sell_score >= action_threshold and sell_score > buy_score:
-        logger.info(f"{ticker_pair}: SELL signal triggered (score: {sell_score} vs buy: {buy_score})")
-        return TradeAction.SELL
+    
+    # Check SELL signals (HOLD lock DOES block sells to prevent selling at loss)
+    if sell_score >= action_threshold and sell_score > buy_score:
+        if hold_lock:
+            logger.info(f"{ticker_pair}: HOLD lock prevents SELL (sell_score: {sell_score})")
+            return TradeAction.HOLD
+        else:
+            logger.info(f"{ticker_pair}: SELL signal triggered (score: {sell_score} vs buy: {buy_score})")
+            return TradeAction.SELL
     
     return TradeAction.NOOP
 
