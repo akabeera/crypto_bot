@@ -17,7 +17,7 @@ from utils.logger import logger
 
 load_dotenv()
 
-CONFIG_FILE = 'config.json'
+CONFIG_FILE = 'config_enhanced.json'
 
 class CryptoBot:
 

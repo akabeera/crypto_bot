@@ -24,4 +24,5 @@ class AverageDown(BaseStrategy):
             logger.debug(f'{ticker_info["symbol"]}: strategy {self.name} trigger BUY signal')
             return TradeAction.BUY
         
-        return TradeAction.HOLD
+        # Don't block other strategies if position isn't bad enough to average down
+        return TradeAction.NOOP
