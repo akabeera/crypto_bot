@@ -48,13 +48,16 @@ def calculate_avg_position(trades):
         return None
     
     average_trade = copy.deepcopy(trades[0])
-
+    if average_trade["fee"]["cost"]:
+        average_trade["fee"]["cost"] = float(average_trade["fee"]["cost"])
+        
     for idx, trade in enumerate(trades):
         if idx == 0:
             continue
 
         shares = trade["filled"]
-        fee = trade["fee"]["cost"]
+        
+        fee = float(trade["fee"]["cost"])
 
         average_trade["filled"] += shares
         average_trade["amount"] += shares

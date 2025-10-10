@@ -5,6 +5,9 @@ from strategies.bollinger_bands import BollingerBands
 from strategies.rsi import RSI
 from strategies.adaptive_rsi import AdaptiveRSI
 from strategies.macd import MACD
+from strategies.price_momentum import PriceMomentum
+from strategies.dynamic_trailing_stop import DynamicTrailingStop
+from strategies.volatility_adjusted import VolatilityAdjusted
 
 
 def strategy_factory(strategy_json) -> BaseStrategy:
@@ -22,6 +25,12 @@ def strategy_factory(strategy_json) -> BaseStrategy:
             return AdaptiveRSI(strategy_json)
         case "MACD":
             return MACD(strategy_json)
+        case "PRICE_MOMENTUM":
+            return PriceMomentum(strategy_json)
+        case "DYNAMIC_TRAILING_STOP":
+            return DynamicTrailingStop(strategy_json)
+        case "VOLATILITY_ADJUSTED":
+            return VolatilityAdjusted(strategy_json)
         case _:
             return None
         

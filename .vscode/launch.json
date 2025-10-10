@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Python: main.py",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "console": "integratedTerminal",
@@ -14,7 +14,7 @@
         },
         {
             "name": "Reporting Module",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "reporting.main",
             "console": "integratedTerminal",
@@ -22,16 +22,16 @@
         },
         {
             "name": "Add Buy",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
-            "args": ["--ticker=AVAX/USD", "--op=add_buy_order", "--orders=418a7a05-7bee-4c2b-8d10-e5d746e4dd4f"],
+            "args": ["--ticker=FIL/USD", "--op=add_buy_order", "--orders=554e4a6d-ffce-4f2d-bfdf-2bc64d30c924"],
             "justMyCode": true
         },
         {
             "name": "Recon",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",     
@@ -41,7 +41,7 @@
         },
         {
             "name": "Get Order",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",     
@@ -50,7 +50,7 @@
         },
         {
             "name": "Add Sell",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
@@ -59,7 +59,7 @@
         },
         {
             "name": "Populate OHLCV",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
@@ -68,9 +68,17 @@
         },
         {
             "name": "unittest",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "unittest",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "playground",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "playground.main",
             "console": "integratedTerminal",
             "justMyCode": false
         }

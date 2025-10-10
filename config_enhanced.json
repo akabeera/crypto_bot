@@ -3,7 +3,7 @@
     "amount_per_transaction": 5,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
-    "trade_cooldown_period": 30,
+    "trade_cooldown_period": 20,
     "currency": "USD",
     "crypto_currency_sleep_interval": 1,
     "exchange_id": "coinbase",
@@ -26,12 +26,61 @@
     },
     "strategies": [
         {
+            "name": "VOLATILITY_ADJUSTED",
+            "priority": 0,
+            "enabled": true,
+            "normalization_factor": 1,
+            "parameters": {
+                "atr_period": 14,
+                "high_volatility_pct": 5,
+                "low_volatility_pct": 2,
+                "signal_mode": "context"
+            },
+            "_comment": "Priority 0 runs first to calculate volatility context for other strategies"
+        },
+        {
+            "name": "DYNAMIC_TRAILING_STOP",
+            "priority": 1,
+            "enabled": true,
+            "prevent_loss": false,
+            "normalization_factor": 1,
+            "parameters": {
+                "activation_percent": 8,
+                "trail_percent": 4,
+                "absolute_take_profit": 20
+            },
+            "_comment": "Priority 1: Check for take profit conditions first (before buying more)"
+        },
+        {
+            "name": "AVERAGE_DOWN",
+            "priority": 1,
+            "parameters": {
+                "threshold_percent": 60,
+                "num_times": 2
+            },
+            "_comment": "Priority 1: Average down on losing positions"
+        },
+        {
+            "name": "PRICE_MOMENTUM",
+            "priority": 2,
+            "enabled": true,
+            "normalization_factor": 1,
+            "parameters": {
+                "min_drop_percent": 7,
+                "lookback_candles": 3,
+                "rsi_max_threshold": 45,
+                "volume_confirmation_multiplier": 1.2
+            },
+            "_comment": "Priority 2: Catch opportunistic dips that indicators miss"
+        },
+        {
             "name": "BOLLINGER_BANDS",
             "priority": 2,
             "parameters": {
                 "window": 20,
                 "std_dev": 2
-            }
+            },
+            "_comment": "Priority 2: Technical indicator strategies"
         },
         {
             "name": "RSI",
@@ -41,7 +90,8 @@
                 "overbought_signal_threshold": 70,
                 "oversold_signal_threshold": 30,
                 "num_candles_required": 3
-            }
+            },
+            "_comment": "Priority 2: RSI with confirmation candles"
         },
         {
             "name": "ADAPTIVE_RSI",
@@ -55,15 +105,8 @@
                 "rsi_period": 14,
                 "trend_ma_period": 50,
                 "trend_factor": 500
-            }
-        },
-        {
-            "name": "AVERAGE_DOWN",
-            "priority": 1,
-            "parameters": {
-                "threshold_percent": 60,
-                "num_times": 2
-            } 
+            },
+            "_comment": "Alternative to regular RSI - enable one or the other"
         },
         {
             "name": "MACD",
@@ -74,7 +117,8 @@
                 "fastperiod": 12,
                 "slowperiod": 26,
                 "signalperiod": 9
-            }
+            },
+            "_comment": "Priority 2: MACD crossover strategy"
         }
     ],
     "overrides": [
@@ -88,6 +132,22 @@
                 "threshold_percent": 5,
                 "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
             }
+        },
+        {
+            "_comment": "Example: Different trailing stop settings for high-volatility coins",
+            "tickers": ["SHIB/USD", "DOGE/USD"],
+            "strategies": [
+                {
+                    "name": "DYNAMIC_TRAILING_STOP",
+                    "priority": 1,
+                    "enabled": true,
+                    "parameters": {
+                        "activation_percent": 10,
+                        "trail_percent": 6,
+                        "absolute_take_profit": 25
+                    }
+                }
+            ]
         }
     ],
     "supported_crypto_currencies": [
@@ -121,3 +181,4 @@
     ],
     "blacklisted_currencies": ["BNT"]
 }
+

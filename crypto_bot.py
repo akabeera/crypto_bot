@@ -7,18 +7,17 @@ from decimal import *
 from dotenv import load_dotenv
 
 from strategies.base_strategy import BaseStrategy
-from strategies.strategy_factory import strategy_factory
-from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_profit_percent, calculate_avg_position, round_down
+from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_avg_position, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
-from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
+# from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
+from utils.strategies_enhanced import execute_strategies, init_strategies, init_strategies_overrides
+
 from utils.logger import logger
 
 load_dotenv()
 
 CONFIG_FILE = 'config.json'
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
 
 class CryptoBot:
 
@@ -145,7 +144,7 @@ class CryptoBot:
             idx += 1 
 
             ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())      
-            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV)
+            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV, params={"timeframe": '15m'})
             if ohlcv == None or len(ohlcv) == 0:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
@@ -194,14 +193,16 @@ class CryptoBot:
             
             if trade_action == TradeAction.BUY:
                 logger.info(f"{ticker_pair}: BUY signal triggered")
-                self.handle_buy_order(ticker_pair)    
+                self.handle_buy_order(ticker_pair, ticker_info)    
             elif trade_action == TradeAction.SELL:
-                logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
-                self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+                logger.info(f'{ticker_pair}: SELL signal triggered but skipping selling until profit thresholds are met.')
+
+                # logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
+                # self.handle_sell_order(ticker_pair, ticker_info, all_positions)
       
             time.sleep(self.crypto_currency_sleep_interval)
         
-    def handle_buy_order(self, ticker_pair: str):        
+    def handle_buy_order(self, ticker_pair: str, ticker_info = None):        
         if self.ticker_in_cooldown(ticker_pair):
             logger.warn(f"{ticker_pair} is in cooldown, skipping buy")
             return None
@@ -215,11 +216,29 @@ class CryptoBot:
             logger.warn(f"{ticker_pair}: insufficient balance to place buy order, skipping")
             return None
         
-        params = {
-            CONSTANTS.PARAM_TOTAL_COST: amount,
-            CONSTANTS.PARAM_ORDER_TYPE: 'buy',
-            CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'market'
-        }
+        params = None
+        if ticker_pair == "MATIC/USD":        
+            if ticker_info is None or "ask" not in ticker_info:
+                return None
+
+            ask_price = Decimal(ticker_info["ask"])
+            shares = float(amount / ask_price)
+            rounded_shares = round_down(shares)
+            
+            params = {
+                CONSTANTS.PARAM_ORDER_TYPE: "buy",
+                CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'limit',
+                CONSTANTS.PARAM_SHARES: rounded_shares,
+                CONSTANTS.PARAM_PRICE: ask_price   
+            }
+
+        else:
+
+            params = {
+                CONSTANTS.PARAM_TOTAL_COST: amount,
+                CONSTANTS.PARAM_ORDER_TYPE: 'buy',
+                CONSTANTS.PARAM_MARKET_ORDER_TYPE: 'market'
+            }
         
         order = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CREATE_ORDER, params=params)
         if not order:

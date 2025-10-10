@@ -2,6 +2,7 @@
 
 
 env/
+.venv/
 __pycache
 **/__pycache__
 logs

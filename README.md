@@ -12,7 +12,7 @@ Due to some dependency conflicts with TALib, Python 3.10.x is recommended.  I re
 Trades are stored in MongoDB to keep track of your current positions across multiple sessions.  It's also used to calculate your overall performance.  [MongoDB community](https://www.mongodb.com/try/download/community) version will suffice but using any other tier will work as long as you have a connection string
 
 3. TALib Core Libraries  
-The crypto-bot has a dependency on the TA-Lib python library, which will automatically be installed with `pip install`.  BUT installing the python library does NOT install the necessary dependencies for the TAL-Lib library.  The TA-Lib python library requies the core TA-Lib libraries, which you can go [here to install the core TA-Lib libraries](https://github.com/TA-Lib/ta-lib-python#dependencies).  
+The crypto-bot has a dependency on the TA-Lib python library, which will automatically be installed with `pip install`.  BUT installing the python library does NOT install the necessary dependencies for the TAL-Lib library.  The TA-Lib python library requires the core TA-Lib libraries, which you can go [here to install the core TA-Lib libraries](https://github.com/TA-Lib/ta-lib-python#dependencies).  
 
 4. Coinbase API Key  
 Currently, the crypto-bot only supports Coinbase exchange but more exchanges will be suppported in the future.  You'll need to create an API key through your coinbase account.  See [here](https://docs.cloud.coinbase.com/sign-in-with-coinbase/docs/api-key-authentication#generating-an-api-key) for instructions.  The below scope should be enabled AND please ensure to enable the specific Crypto Currencies you plan to run.    

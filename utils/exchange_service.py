@@ -9,7 +9,7 @@ import utils.constants as CONSTANTS
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
+API_SECRET = os.getenv('API_SECRET').replace('\\n', '\n')
 
 class ExchangeService:
     _exchange = None
@@ -65,7 +65,7 @@ class ExchangeService:
                     timeframe = params[CONSTANTS.PARAM_TIMEFRAME]
                 if CONSTANTS.PARAM_SINCE in params:
                     since = params[CONSTANTS.PARAM_SINCE]
-                return self.exchange_client.fetch_ohlcv(ticker_pair)
+                return self.exchange_client.fetch_ohlcv(ticker_pair, timeframe)
             elif op == CONSTANTS.OP_FETCH_ORDER: 
                 if CONSTANTS.PARAM_ORDER_ID not in params or params[CONSTANTS.PARAM_ORDER_ID] is None:
                     logger.error(f"{ticker_pair}: missing or invalid 'order_id' param is fetchOrder")
@@ -211,10 +211,15 @@ class ExchangeService:
 
         order = None
         status = order_results['status']
+        num_retries = 3
+        curr_retry = 0
         while (status != 'closed'):
             time.sleep(1)
             order = self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_ORDER, params=params)
             if (order == None):
+                if curr_retry < num_retries:
+                    curr_retry += 1
+                    continue
                 return None
 
             status = order['status']
