@@ -217,9 +217,10 @@ class CryptoBot:
             return None
         
         params = None
-        if ticker_pair == "MATIC/USD":        
-            if ticker_info is None or "ask" not in ticker_info:
-                return None
+        if ticker_info is None:
+            return None
+        
+        if "ask" in ticker_info:
 
             ask_price = Decimal(ticker_info["ask"])
             shares = float(amount / ask_price)
