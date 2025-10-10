@@ -24,7 +24,21 @@ def configureLogger(logLevel: str):
     if  not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % logLevel)
 
-    logging.getLogger().setLevel(numeric_level)
+    # Set root logger to INFO to quiet third-party libraries
+    logging.getLogger().setLevel(logging.INFO)
+    
+    # Only set DEBUG for our bot's modules
+    if numeric_level == logging.DEBUG:
+        logging.getLogger('strategies').setLevel(logging.DEBUG)
+        logging.getLogger('utils').setLevel(logging.DEBUG)
+        logging.getLogger('crypto_bot').setLevel(logging.DEBUG)
+        logging.getLogger('__main__').setLevel(logging.DEBUG)
+    else:
+        # For other levels, apply to our modules too
+        logging.getLogger('strategies').setLevel(numeric_level)
+        logging.getLogger('utils').setLevel(numeric_level)
+        logging.getLogger('crypto_bot').setLevel(numeric_level)
+        logging.getLogger('__main__').setLevel(numeric_level)
 
 # Configure logger with level from environment variable, default to INFO
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

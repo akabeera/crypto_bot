@@ -63,6 +63,11 @@ class PriceMomentum(BaseStrategy):
         
         current_rsi = recent_candles.iloc[-1][rsi_key]
         
+        # DIAGNOSTIC: Always log the values for debugging
+        logger.debug(f'{ticker}: {self.name} evaluation - '
+                    f'drop: {drop_percent:.2f}%, RSI: {current_rsi:.1f}, '
+                    f'volume: {volume_ratio:.2f}x avg, candles: {len(candles_df)}')
+        
         # BUY CONDITIONS:
         # 1. Sharp drop detected
         # 2. RSI not overbought (confirms oversold condition)
@@ -78,10 +83,10 @@ class PriceMomentum(BaseStrategy):
         
         # Log near-misses for tuning (only if close to triggering)
         if drop_percent <= -self.min_drop_percent * 0.8:
-            logger.debug(f'{ticker}: {self.name} near trigger - '
-                        f'drop: {drop_percent:.2f}%, RSI: {current_rsi:.1f}, '
-                        f'volume: {volume_ratio:.2f}x (need {self.min_drop_percent}% drop, '
-                        f'RSI<{self.rsi_max_threshold}, vol>{self.volume_confirmation_multiplier}x)')
+            logger.info(f'{ticker}: {self.name} near trigger - '
+                       f'drop: {drop_percent:.2f}%, RSI: {current_rsi:.1f}, '
+                       f'volume: {volume_ratio:.2f}x (need {self.min_drop_percent}% drop, '
+                       f'RSI<{self.rsi_max_threshold}, vol>{self.volume_confirmation_multiplier}x)')
         
         return TradeAction.NOOP
 
