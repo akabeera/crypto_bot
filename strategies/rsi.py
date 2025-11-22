@@ -35,10 +35,10 @@ class RSI(BaseStrategy):
         #logger.info(f"{ticker}: REGULAR RSI: {rsi}")
 
         action = TradeAction.NOOP
-        if (candles_to_evaluate[rsi_key] > self.overbought_signal_threshold).all():
+        if candles_to_evaluate[rsi_key].iloc[-1] > self.overbought_signal_threshold:
             logger.debug(f'{ticker}: {self.name} triggered SELL signal')
             action = TradeAction.SELL
-        elif (candles_to_evaluate[rsi_key] < self.oversold_signal_threshold).all():
+        elif candles_to_evaluate[rsi_key].iloc[-1] < self.oversold_signal_threshold:
             logger.debug(f'{ticker}: {self.name} triggered BUY signal')
             action = TradeAction.BUY
 

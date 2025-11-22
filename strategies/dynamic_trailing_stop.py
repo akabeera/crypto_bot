@@ -19,7 +19,7 @@ class DynamicTrailingStop(BaseStrategy):
     The bot tracks high water marks and triggers sells via normal limit orders.
     """
     
-    def __init__(self, config):
+    def __init__(self, config, mongodb_service=None):
         parameters = config["parameters"]
         
         # Profit % to activate trailing stop (e.g., 8% = activate at 8% profit)
@@ -33,9 +33,60 @@ class DynamicTrailingStop(BaseStrategy):
         
         super().__init__(config)
         
+        self.mongodb_service = mongodb_service
+        self.collection_name = "strategy_state"
+        
         # Track highest prices for each position (stored in memory per bot run)
         # Key: position_id, Value: {"highest_bid": Decimal, "activated": bool}
         self.position_high_water_marks = {}
+        
+        # Load state from DB if available
+        if self.mongodb_service:
+            self._load_state()
+
+    def _load_state(self):
+        try:
+            filter_dict = {"strategy": self.name}
+            state_docs = self.mongodb_service.query(self.collection_name, filter_dict)
+            for doc in state_docs:
+                position_id = doc["position_id"]
+                self.position_high_water_marks[position_id] = {
+                    "highest_bid": Decimal(str(doc["highest_bid"])),
+                    "activated": doc["activated"],
+                    "entry_price": Decimal(str(doc["entry_price"]))
+                }
+            logger.info(f"{self.name}: Loaded state for {len(self.position_high_water_marks)} positions")
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to load state: {e}")
+
+    def _save_state(self, position_id):
+        if not self.mongodb_service:
+            return
+            
+        try:
+            tracking = self.position_high_water_marks[position_id]
+            document = {
+                "strategy": self.name,
+                "position_id": position_id,
+                "highest_bid": float(tracking["highest_bid"]),
+                "activated": tracking["activated"],
+                "entry_price": float(tracking["entry_price"]),
+                "updated_at": str(Decimal(0)) # Placeholder or timestamp
+            }
+            filter_dict = {"strategy": self.name, "position_id": position_id}
+            self.mongodb_service.replace_one(self.collection_name, document, filter_dict, upsert=True)
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to save state for {position_id}: {e}")
+
+    def _delete_state(self, position_id):
+        if not self.mongodb_service:
+            return
+            
+        try:
+            filter_dict = {"strategy": self.name, "position_id": position_id}
+            self.mongodb_service.delete_many(self.collection_name, filter_dict)
+        except Exception as e:
+            logger.error(f"{self.name}: Failed to delete state for {position_id}: {e}")
 
     def eval(self, avg_position, candles_df, ticker_info):
         if not self.enabled:
@@ -72,12 +123,14 @@ class DynamicTrailingStop(BaseStrategy):
         if current_bid > tracking["highest_bid"]:
             tracking["highest_bid"] = current_bid
             logger.debug(f'{ticker}: {self.name} new high water mark: ${tracking["highest_bid"]:.4f}')
+            self._save_state(position_id)
         
         # Activate trailing stop if profit threshold reached
         if profit_pct >= self.activation_percent and not tracking["activated"]:
             tracking["activated"] = True
             logger.info(f'{ticker}: {self.name} TRAILING STOP ACTIVATED at {profit_pct*100:.2f}% profit. '
                        f'Will trail by {self.trail_percent*100:.2f}%')
+            self._save_state(position_id)
         
         # If trailing activated, check if we should sell
         if tracking["activated"]:
@@ -92,6 +145,7 @@ class DynamicTrailingStop(BaseStrategy):
                 
                 # Clean up tracking (will be reinitialized if position reopened)
                 del self.position_high_water_marks[position_id]
+                self._delete_state(position_id)
                 
                 return TradeAction.SELL
             
@@ -110,4 +164,5 @@ class DynamicTrailingStop(BaseStrategy):
         """
         if str(position_id) in self.position_high_water_marks:
             del self.position_high_water_marks[str(position_id)]
+            self._delete_state(str(position_id))
 

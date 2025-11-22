@@ -10,7 +10,7 @@ from strategies.dynamic_trailing_stop import DynamicTrailingStop
 from strategies.volatility_adjusted import VolatilityAdjusted
 
 
-def strategy_factory(strategy_json) -> BaseStrategy:
+def strategy_factory(strategy_json, mongodb_service=None) -> BaseStrategy:
     strategy_name = strategy_json["name"]
     match strategy_name:
         case "TAKE_PROFIT":
@@ -28,12 +28,8 @@ def strategy_factory(strategy_json) -> BaseStrategy:
         case "PRICE_MOMENTUM":
             return PriceMomentum(strategy_json)
         case "DYNAMIC_TRAILING_STOP":
-            return DynamicTrailingStop(strategy_json)
+            return DynamicTrailingStop(strategy_json, mongodb_service)
         case "VOLATILITY_ADJUSTED":
             return VolatilityAdjusted(strategy_json)
         case _:
             return None
-        
-
-
-    

@@ -82,7 +82,7 @@ class CryptoBot:
     def init(self):
         (self.take_profit_threshold, self.take_profit_evaluation_type) = self.init_take_profits_config(self.config[CONSTANTS.CONFIG_TAKE_PROFITS])
 
-        self.strategies: dict[str, BaseStrategy] = init_strategies(self.config)
+        self.strategies: dict[str, BaseStrategy] = init_strategies(self.config, self.mongodb_service)
         self.init_overrides()
 
     def init_take_profits_config(self, take_profits_config):
@@ -106,7 +106,7 @@ class CryptoBot:
         if CONSTANTS.CONFIG_OVERRIDES not in self.config:
             return
         
-        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config)
+        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config, self.mongodb_service)
         self.overrides: dict[str, dict[str, any]] = dict()
 
         overrides_config = self.config[CONSTANTS.CONFIG_OVERRIDES]

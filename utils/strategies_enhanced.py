@@ -7,7 +7,7 @@ from strategies.strategy_factory import strategy_factory
 
 from utils.logger import logger
 
-def init_strategies(config) -> dict[int, BaseStrategy]:
+def init_strategies(config, mongodb_service=None) -> dict[int, BaseStrategy]:
     """
     Initialize strategies from config, organized by priority.
     Returns dict where key=priority, value=list of strategies at that priority.
@@ -28,7 +28,7 @@ def init_strategies(config) -> dict[int, BaseStrategy]:
         if not strategy_enabled:
             continue
 
-        strategy_object = strategy_factory(strategy_config)
+        strategy_object = strategy_factory(strategy_config, mongodb_service)
 
         if strategy_object is None:
             logger.warn(f"Encountered unsupported strategy config: {strategy_config}")
@@ -43,7 +43,7 @@ def init_strategies(config) -> dict[int, BaseStrategy]:
     return strategies
 
 
-def init_strategies_overrides(config) -> dict[str, dict[str, BaseStrategy]]:
+def init_strategies_overrides(config, mongodb_service=None) -> dict[str, dict[str, BaseStrategy]]:
     """
     Initialize per-ticker strategy overrides from config.
     Returns dict where key=ticker, value=dict of strategy overrides.
@@ -64,7 +64,7 @@ def init_strategies_overrides(config) -> dict[str, dict[str, BaseStrategy]]:
             if CONSTANTS.CONFIG_STRATEGIES in so:
                 for s in so[CONSTANTS.CONFIG_STRATEGIES]:
                     strat_name = s[CONSTANTS.CONFIG_STRATEGY_NAME]
-                    strat_object =  strategy_factory(s)
+                    strat_object =  strategy_factory(s, mongodb_service)
 
                     logger.info(f"{ticker}: setting strategy override: {strat_name}")
                     strategies_overrides[ticker][strat_name] = strat_object
@@ -105,6 +105,28 @@ def execute_strategies_scoring(ticker_pair: str,
     sell_score = 0
     hold_lock = False
     
+    # First pass: Find VolatilityAdjusted strategy to get multiplier
+    volatility_multiplier = 1.0
+    for priority, strategy_list in strategies.items():
+        for strategy in strategy_list:
+            if strategy.name == "VOLATILITY_ADJUSTED":
+                # We need to cast to VolatilityAdjusted to access specific methods if not in BaseStrategy
+                # But python is dynamic, so we can just try calling it if it exists
+                if hasattr(strategy, "get_volatility_multiplier"):
+                    # Note: We need the ticker symbol, which is in ticker_pair (e.g. BTC/USD)
+                    # get_volatility_multiplier expects just the symbol usually, or we pass the whole pair
+                    # Let's check how it was implemented. It takes 'ticker'.
+                    # In VolatilityAdjusted.eval, it uses ticker_info["symbol"]
+                    # Here we have ticker_pair. Let's assume ticker_pair is what we want or split it.
+                    # Actually, VolatilityAdjusted stores state by 'ticker'.
+                    # In eval it does: ticker = ticker_info["symbol"]
+                    # So we should pass ticker_info["symbol"]
+                    if "symbol" in ticker_info:
+                        vol_mult = strategy.get_volatility_multiplier(ticker_info["symbol"])
+                        volatility_multiplier = float(vol_mult)
+                        logger.debug(f"{ticker_pair}: Volatility multiplier: {volatility_multiplier}")
+                break
+    
     for priority, strategy_list in strategies.items():
         # Calculate priority weight (lower priority number = higher weight)
         if priority == 1:
@@ -113,6 +135,11 @@ def execute_strategies_scoring(ticker_pair: str,
             weight = 2
         else:
             weight = 1
+            
+        # Apply volatility multiplier
+        # We apply it to the weight, so high volatility (mult < 1) reduces impact
+        # Low volatility (mult > 1) increases impact
+        weight = weight * volatility_multiplier
         
         for strategy in strategy_list:
             curr_strat_name = strategy.name
@@ -129,10 +156,10 @@ def execute_strategies_scoring(ticker_pair: str,
             # Update scores based on action
             if curr_action == TradeAction.BUY:
                 buy_score += weight
-                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight}) -> BUY (+{weight})")
+                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight:.2f}) -> BUY (+{weight:.2f})")
             elif curr_action == TradeAction.SELL:
                 sell_score += weight
-                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight}) -> SELL (+{weight})")
+                logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}, W{weight:.2f}) -> SELL (+{weight:.2f})")
             elif curr_action == TradeAction.HOLD:
                 hold_lock = True
                 logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}) -> HOLD (lock activated)")
