@@ -33,7 +33,7 @@ class MACD(BaseStrategy):
         macd_key = "MACD"
         macd_signal_key = "MACD_signal"
 
-        candles_df[macd_key], candles_df[macd_signal_key], _ = talib.MACD(candles_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        candles_df[macd_key], candles_df[macd_signal_key], _ = talib.MACD(candles_df['close'], fastperiod=self.fastperiod, slowperiod=self.slowperiod, signalperiod=self.signalperiod)
         
         last_row = candles_df.iloc[-1]
         macd = last_row[macd_key]

@@ -37,8 +37,21 @@ def calculate_profit_percent(position, bid_price: float) -> Decimal:
 
     profit = (bid - price) * shares 
 
-    # assume fee for selling is the same as buying
-    profit_after_fees = profit - (fee * FEE_MULTIPLIER)
+    # Calculate fee rate from the buy side
+    # fee_rate = fee / cost
+    fee_rate = Decimal(0)
+    if cost > 0:
+        fee_rate = fee / cost
+
+    # Estimate sell fee based on current bid value
+    sell_value = bid * shares
+    estimated_sell_fee = sell_value * fee_rate
+
+    # profit_after_fees = sell_value - buy_cost - buy_fee - estimated_sell_fee
+    # profit (gross) is (sell_value - buy_cost)
+    # so profit_after_fees = profit - buy_fee - estimated_sell_fee
+    
+    profit_after_fees = profit - fee - estimated_sell_fee
     profit_after_fees_pct = profit_after_fees/cost
 
     return profit_after_fees_pct

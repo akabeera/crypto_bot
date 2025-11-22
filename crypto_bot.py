@@ -3,6 +3,7 @@ import os
 import time
 import pandas as pd
 import utils.constants as CONSTANTS
+import talib
 from decimal import *
 from dotenv import load_dotenv
 
@@ -55,6 +56,18 @@ class CryptoBot:
         if CONSTANTS.CONFIG_CRYPTO_CURRENCY_SLEEP_INTERVAL in self.config:
             self.crypto_currency_sleep_interval = self.config[CONSTANTS.CONFIG_CRYPTO_CURRENCY_SLEEP_INTERVAL]
 
+        self.ohlcv_timeframe = CONSTANTS.CONFIG_DEFAULT_OHLCV_TIMEFRAME
+        if CONSTANTS.CONFIG_OHLCV_TIMEFRAME in self.config:
+            self.ohlcv_timeframe = self.config[CONSTANTS.CONFIG_OHLCV_TIMEFRAME]
+
+        self.dynamic_timeframe = False
+        if CONSTANTS.CONFIG_DYNAMIC_TIMEFRAME in self.config:
+            self.dynamic_timeframe = self.config[CONSTANTS.CONFIG_DYNAMIC_TIMEFRAME]
+
+        self.volatility_thresholds = {"high": 2.0, "low": 0.5}
+        if CONSTANTS.CONFIG_VOLATILITY_THRESHOLDS in self.config:
+            self.volatility_thresholds = self.config[CONSTANTS.CONFIG_VOLATILITY_THRESHOLDS]
+
         self.crypto_whitelist = self.config[CONSTANTS.CONFIG_SUPPORTED_CRYPTO_CURRENCIES]
         self.crypto_blacklist = []
         if CONSTANTS.CONFIG_BLACKLISTED_CRYPTO_CURRENCIES in self.config:
@@ -82,7 +95,7 @@ class CryptoBot:
     def init(self):
         (self.take_profit_threshold, self.take_profit_evaluation_type) = self.init_take_profits_config(self.config[CONSTANTS.CONFIG_TAKE_PROFITS])
 
-        self.strategies: dict[str, BaseStrategy] = init_strategies(self.config)
+        self.strategies: dict[str, BaseStrategy] = init_strategies(self.config, self.mongodb_service)
         self.init_overrides()
 
     def init_take_profits_config(self, take_profits_config):
@@ -106,7 +119,7 @@ class CryptoBot:
         if CONSTANTS.CONFIG_OVERRIDES not in self.config:
             return
         
-        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config)
+        self.strategies_overrides: dict[str, dict[str, BaseStrategy]] = init_strategies_overrides(self.config, self.mongodb_service)
         self.overrides: dict[str, dict[str, any]] = dict()
 
         overrides_config = self.config[CONSTANTS.CONFIG_OVERRIDES]
@@ -143,8 +156,14 @@ class CryptoBot:
             ticker:str = self.supported_crypto_list[idx]
             idx += 1 
 
-            ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())      
-            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV, params={"timeframe": '15m'})
+            ticker_pair:str = "{}/{}".format(ticker.upper(), self.currency.upper())
+            
+            timeframe = self.ohlcv_timeframe
+            if self.dynamic_timeframe:
+                timeframe = self.get_optimal_timeframe(ticker_pair)
+                logger.info(f"{ticker_pair}: dynamic timeframe selected: {timeframe}")
+
+            ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV, params={"timeframe": timeframe})
             if ohlcv == None or len(ohlcv) == 0:
                 logger.error(f"{ticker_pair}: unable to fetch ohlcv, skipping")
                 continue
@@ -343,3 +362,36 @@ class CryptoBot:
         elapse_time_minutes = elapsed_time/60
 
         return elapse_time_minutes
+
+    def get_optimal_timeframe(self, ticker_pair):
+        # Fetch 1h candles for volatility check
+        ohlcv = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_OHLCV, params={"timeframe": '1h'})
+        if not ohlcv or len(ohlcv) < 15:
+            return self.ohlcv_timeframe
+
+        df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+        
+        # Calculate ATR (14 periods)
+        high = df['high']
+        low = df['low']
+        close = df['close']
+        
+        try:
+            atr = talib.ATR(high, low, close, timeperiod=14)
+            last_atr = atr.iloc[-1]
+            last_close = close.iloc[-1]
+            
+            if last_close == 0:
+                return self.ohlcv_timeframe
+
+            volatility_pct = (last_atr / last_close) * 100
+            
+            if volatility_pct > self.volatility_thresholds["high"]:
+                return '15m'
+            elif volatility_pct < self.volatility_thresholds["low"]:
+                return '4h'
+            
+        except Exception as e:
+            logger.error(f"{ticker_pair}: error calculating volatility: {e}")
+            
+        return '1h'
