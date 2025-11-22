@@ -1,22 +1,28 @@
 {
-    "max_spend": 200,
+    "max_spend": 50,
     "amount_per_transaction": 5,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
     "currency": "USD",
     "crypto_currency_sleep_interval": 1,
+    "ohlcv_timeframe": "1h",
+    "dynamic_timeframe": true,
+    "volatility_thresholds": {
+        "high": 2.0,
+        "low": 0.5
+    },
     "exchange_id": "coinbase",
     "dry_run": false,
     "take_profits": {
         "threshold_percent": 50,
-        "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
+        "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS"
     },
-    "db":{
+    "db": {
         "db_type": "mongodb",
         "db_name": "crypto-bot",
         "current_positions_collection": "trades",
-        "closed_positions_collection" : "sell_orders"
+        "closed_positions_collection": "sell_orders"
     },
     "exchange": {
         "exchange_id": "coinbase",
@@ -123,19 +129,26 @@
     ],
     "overrides": [
         {
-            "tickers": ["ASM/USD"],
+            "tickers": [
+                "ASM/USD"
+            ],
             "amount_per_transaction": 10
         },
         {
-            "tickers": ["BNT/USD"],
+            "tickers": [
+                "BNT/USD"
+            ],
             "take_profits": {
                 "threshold_percent": 5,
-                "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
+                "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS"
             }
         },
         {
             "_comment": "Example: Different trailing stop settings for high-volatility coins",
-            "tickers": ["SHIB/USD", "DOGE/USD"],
+            "tickers": [
+                "SHIB/USD",
+                "DOGE/USD"
+            ],
             "strategies": [
                 {
                     "name": "DYNAMIC_TRAILING_STOP",
@@ -179,6 +192,7 @@
         "FET",
         "XRP"
     ],
-    "blacklisted_currencies": ["BNT"]
+    "blacklisted_currencies": [
+        "BNT"
+    ]
 }
-
