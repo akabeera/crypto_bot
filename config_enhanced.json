@@ -1,5 +1,5 @@
 {
-    "max_spend": 250,
+    "max_spend": 200,
     "amount_per_transaction": 5,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
@@ -9,7 +9,7 @@
     "exchange_id": "coinbase",
     "dry_run": false,
     "take_profits": {
-        "threshold_percent": 10,
+        "threshold_percent": 50,
         "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS" 
     },
     "db":{
@@ -151,7 +151,7 @@
         }
     ],
     "supported_crypto_currencies": [
-        "MATIC",
+        "POLY",
         "LPT",
         "WCFG",
         "BNT",
