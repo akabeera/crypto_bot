@@ -173,7 +173,8 @@
         "graduated_exit": {
             "max_hold_days": 28,
             "max_loss_percent": 5.0,
-            "loss_active_after_days": 14
+            "loss_active_after_days": 14,
+            "underperform_threshold_percent": 10.0
         }
     },
     "supported_crypto_currencies": [

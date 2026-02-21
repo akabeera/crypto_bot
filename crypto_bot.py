@@ -93,6 +93,8 @@ class CryptoBot:
             self.ge_max_hold_days = ge_config.get(CONSTANTS.CONFIG_DCS_GE_MAX_HOLD_DAYS, CONSTANTS.DEFAULT_DCS_GE_MAX_HOLD_DAYS)
             self.ge_max_loss_percent = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_MAX_LOSS_PERCENT, CONSTANTS.DEFAULT_DCS_GE_MAX_LOSS_PERCENT))) / 100
             self.ge_loss_active_after_days = ge_config.get(CONSTANTS.CONFIG_DCS_GE_LOSS_ACTIVE_AFTER_DAYS, CONSTANTS.DEFAULT_DCS_GE_LOSS_ACTIVE_AFTER_DAYS)
+            self.ge_underperform_threshold = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_UNDERPERFORM_THRESHOLD, CONSTANTS.DEFAULT_DCS_GE_UNDERPERFORM_THRESHOLD))) / 100
+            self.btc_price_at_demotion = {}  # coin -> BTC price when demoted
 
             # Extract base trailing stop params from strategy config for graduated exit
             self.ge_base_activation = Decimal("0.08")  # 8% default
@@ -283,15 +285,25 @@ class CryptoBot:
 
         # Update demoted_coins tracking
         now = time.time()
+        # Snapshot BTC price for market-relative loss calculations
+        btc_ticker = self.exchange_service.execute_op(ticker_pair=f"BTC/{self.currency}", op=CONSTANTS.OP_FETCH_TICKER)
+        btc_price_now = None
+        if btc_ticker and btc_ticker.get("last"):
+            btc_price_now = Decimal(str(btc_ticker["last"]))
         # Add newly demoted coins
         for coin in demoted_set:
             if coin not in self.demoted_coins:
                 self.demoted_coins[coin] = now
-                logger.info(f"DCS: {coin} demoted — graduated exit active")
+                if btc_price_now is not None:
+                    self.btc_price_at_demotion[coin] = btc_price_now
+                    logger.info(f"DCS: {coin} demoted — graduated exit active (BTC snapshot: {btc_price_now})")
+                else:
+                    logger.info(f"DCS: {coin} demoted — graduated exit active (BTC snapshot unavailable)")
         # Remove coins that re-qualified (no longer demoted)
         re_qualified = [c for c in self.demoted_coins if c not in demoted_set]
         for coin in re_qualified:
             del self.demoted_coins[coin]
+            self.btc_price_at_demotion.pop(coin, None)
             logger.info(f"DCS: {coin} re-qualified — graduated exit removed")
 
         self.supported_crypto_list = new_list
@@ -312,30 +324,75 @@ class CryptoBot:
         demotion_time = self.demoted_coins[ticker]
         days_demoted = (time.time() - demotion_time) / 86400
 
-        # Force exit after max hold days
-        if days_demoted >= self.ge_max_hold_days:
-            logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit after {days_demoted:.1f} days demoted")
-            return TradeAction.SELL
-
         # Tightening factor: starts at 0.5, decays linearly to 0.1 over max_hold_days
         tightening_factor = Decimal(str(max(0.1, 0.5 - (0.4 * days_demoted / self.ge_max_hold_days))))
 
         effective_activation = self.ge_base_activation * tightening_factor
-        effective_trail = self.ge_base_trail * tightening_factor
 
         profit_pct = calculate_profit_percent(avg_position, ticker_info["bid"])
         if profit_pct is None:
             return TradeAction.NOOP
 
-        # If profit exceeds tightened activation, take it
+        # TIGHTENED TAKE-PROFIT — always applies regardless of market conditions
         if profit_pct >= effective_activation:
             logger.info(f"{ticker_pair}: GRADUATED EXIT — taking profit {profit_pct*100:.2f}% "
                        f"(tightened activation: {effective_activation*100:.2f}%, "
                        f"days demoted: {days_demoted:.1f})")
             return TradeAction.SELL
 
-        # Stop-loss active after configured grace period
-        if days_demoted >= self.ge_loss_active_after_days:
+        # MARKET-RELATIVE LOSS CHECK — only trigger loss-side exits when coin underperforms BTC
+        relative_loss = None
+        use_absolute_fallback = False
+
+        btc_snapshot = self.btc_price_at_demotion.get(ticker)
+        if btc_snapshot is not None:
+            btc_ticker = self.exchange_service.execute_op(
+                ticker_pair=f"BTC/{self.currency}", op=CONSTANTS.OP_FETCH_TICKER
+            )
+            if btc_ticker and btc_ticker.get("last"):
+                btc_current = Decimal(str(btc_ticker["last"]))
+                btc_change_pct = (btc_current - btc_snapshot) / btc_snapshot
+                relative_loss = profit_pct - btc_change_pct
+                logger.debug(f"{ticker_pair}: market-relative check — coin: {profit_pct*100:.2f}%, "
+                            f"BTC: {btc_change_pct*100:.2f}%, relative: {relative_loss*100:.2f}%")
+            else:
+                logger.warning(f"{ticker_pair}: failed to fetch current BTC price, falling back to absolute loss")
+                use_absolute_fallback = True
+        else:
+            logger.warning(f"{ticker_pair}: no BTC snapshot at demotion, falling back to absolute loss")
+            use_absolute_fallback = True
+
+        coin_underperforming = False
+        if use_absolute_fallback:
+            # Fallback: use absolute loss (original behavior) to avoid being stuck
+            coin_underperforming = profit_pct < CONSTANTS.ZERO
+        else:
+            coin_underperforming = relative_loss < -self.ge_underperform_threshold
+
+        # Force exit after max hold days — only if coin is underperforming market (or truly dead)
+        if days_demoted >= self.ge_max_hold_days:
+            # Check for zero volume (actually dead / delisting)
+            ticker_volume = ticker_info.get("quoteVolume") or ticker_info.get("baseVolume") or 0
+            if ticker_volume == 0:
+                logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit (zero volume, possible delisting) "
+                           f"after {days_demoted:.1f} days demoted")
+                return TradeAction.SELL
+
+            if coin_underperforming:
+                if use_absolute_fallback:
+                    logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit after {days_demoted:.1f} days "
+                               f"(absolute loss: {profit_pct*100:.2f}%)")
+                else:
+                    logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit after {days_demoted:.1f} days "
+                               f"(relative loss vs BTC: {relative_loss*100:.2f}%, "
+                               f"threshold: -{self.ge_underperform_threshold*100:.2f}%)")
+                return TradeAction.SELL
+            else:
+                logger.info(f"{ticker_pair}: GRADUATED EXIT — max hold days reached but coin is not "
+                           f"underperforming market, holding (relative: {relative_loss*100:.2f}%)")
+
+        # Stop-loss active after configured grace period — market-relative
+        if days_demoted >= self.ge_loss_active_after_days and coin_underperforming:
             # Time-decay the max loss: starts at ge_max_loss_percent, tightens to half by max_hold_days
             days_past_grace = days_demoted - self.ge_loss_active_after_days
             remaining_days = self.ge_max_hold_days - self.ge_loss_active_after_days
@@ -345,14 +402,23 @@ class CryptoBot:
                 decay_factor = Decimal("0.5")
             effective_max_loss = self.ge_max_loss_percent * decay_factor
 
-            if profit_pct < CONSTANTS.ZERO and abs(profit_pct) >= effective_max_loss:
-                logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss at {profit_pct*100:.2f}% "
-                           f"(max loss: -{effective_max_loss*100:.2f}%, "
-                           f"days demoted: {days_demoted:.1f})")
+            loss_to_check = profit_pct if use_absolute_fallback else relative_loss
+            if loss_to_check < CONSTANTS.ZERO and abs(loss_to_check) >= effective_max_loss:
+                if use_absolute_fallback:
+                    logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss at {profit_pct*100:.2f}% "
+                               f"(max loss: -{effective_max_loss*100:.2f}%, "
+                               f"days demoted: {days_demoted:.1f})")
+                else:
+                    logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss on relative loss {relative_loss*100:.2f}% "
+                               f"(coin: {profit_pct*100:.2f}%, BTC: {(profit_pct - relative_loss)*100:.2f}%, "
+                               f"max loss: -{effective_max_loss*100:.2f}%, "
+                               f"days demoted: {days_demoted:.1f})")
                 return TradeAction.SELL
 
+        relative_str = f"relative_loss: {relative_loss*100:.2f}%, " if relative_loss is not None else ""
         logger.debug(f"{ticker_pair}: graduated exit check — profit: {profit_pct*100:.2f}%, "
                     f"activation: {effective_activation*100:.2f}%, "
+                    f"{relative_str}"
                     f"days demoted: {days_demoted:.1f}")
         return TradeAction.NOOP
 
