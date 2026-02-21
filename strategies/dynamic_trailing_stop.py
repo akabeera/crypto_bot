@@ -154,8 +154,8 @@ class DynamicTrailingStop(BaseStrategy):
                         f'peak: ${tracking["highest_bid"]:.4f}, '
                         f'drop: {drop_from_highest*100:.2f}%, '
                         f'trail trigger: {self.trail_percent*100:.2f}%')
-        
-        return TradeAction.HOLD
+
+        return TradeAction.NOOP
 
     def cleanup_position(self, position_id):
         """

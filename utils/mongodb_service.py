@@ -71,6 +71,21 @@ class MongoDBService:
             # Handle any other PyMongo errors
             print(f"An error occurred while query: {e}")
 
+    def distinct(self, collection, field, filter_dict=None):
+        if filter_dict is None:
+            filter_dict = {}
+        try:
+            if self.db is None:
+                raise OperationFailure("Database not accessible")
+            coll = self.db[collection]
+            return coll.distinct(field, filter_dict)
+        except OperationFailure as e:
+            print(f"Operation failed in distinct: {e}")
+            return []
+        except PyMongoError as e:
+            print(f"An error occurred in distinct: {e}")
+            return []
+
     def insert_one(self, collection, document):
         try:
             if self.db is None:

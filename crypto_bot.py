@@ -8,7 +8,7 @@ from decimal import *
 from dotenv import load_dotenv
 
 from strategies.base_strategy import BaseStrategy
-from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_avg_position, round_down
+from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable_trades, calculate_avg_position, calculate_profit_percent, round_down
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 # from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
@@ -74,6 +74,35 @@ class CryptoBot:
             self.crypto_blacklist = self.config[CONSTANTS.CONFIG_BLACKLISTED_CRYPTO_CURRENCIES]
 
         self.supported_crypto_list = list(set(self.crypto_whitelist).difference(self.crypto_blacklist))
+
+        # Dynamic Coin Selection config
+        self.dcs_enabled = False
+        self.last_coin_refresh_time = 0
+        dcs_config = self.config.get(CONSTANTS.CONFIG_DYNAMIC_COIN_SELECTION, {})
+        if dcs_config.get(CONSTANTS.CONFIG_DCS_ENABLED, False):
+            self.dcs_enabled = True
+            self.dcs_top_n = dcs_config.get(CONSTANTS.CONFIG_DCS_TOP_N, CONSTANTS.DEFAULT_DCS_TOP_N)
+            self.dcs_min_volume = dcs_config.get(CONSTANTS.CONFIG_DCS_MIN_24H_VOLUME_USD, CONSTANTS.DEFAULT_DCS_MIN_24H_VOLUME_USD)
+            self.dcs_max_spread = dcs_config.get(CONSTANTS.CONFIG_DCS_MAX_SPREAD_PERCENT, CONSTANTS.DEFAULT_DCS_MAX_SPREAD_PERCENT)
+            self.dcs_refresh_interval = dcs_config.get(CONSTANTS.CONFIG_DCS_REFRESH_INTERVAL_MINUTES, CONSTANTS.DEFAULT_DCS_REFRESH_INTERVAL_MINUTES)
+            self.dcs_always_include = dcs_config.get(CONSTANTS.CONFIG_DCS_ALWAYS_INCLUDE, [])
+            self.demoted_coins = {}  # coin -> demotion timestamp
+
+            # Graduated exit config
+            ge_config = dcs_config.get(CONSTANTS.CONFIG_DCS_GRADUATED_EXIT, {})
+            self.ge_max_hold_days = ge_config.get(CONSTANTS.CONFIG_DCS_GE_MAX_HOLD_DAYS, CONSTANTS.DEFAULT_DCS_GE_MAX_HOLD_DAYS)
+            self.ge_max_loss_percent = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_MAX_LOSS_PERCENT, CONSTANTS.DEFAULT_DCS_GE_MAX_LOSS_PERCENT))) / 100
+            self.ge_loss_active_after_days = ge_config.get(CONSTANTS.CONFIG_DCS_GE_LOSS_ACTIVE_AFTER_DAYS, CONSTANTS.DEFAULT_DCS_GE_LOSS_ACTIVE_AFTER_DAYS)
+
+            # Extract base trailing stop params from strategy config for graduated exit
+            self.ge_base_activation = Decimal("0.08")  # 8% default
+            self.ge_base_trail = Decimal("0.04")  # 4% default
+            for strat_config in self.config.get(CONSTANTS.CONFIG_STRATEGIES, []):
+                if strat_config.get(CONSTANTS.CONFIG_STRATEGY_NAME) == "DYNAMIC_TRAILING_STOP":
+                    params = strat_config.get(CONSTANTS.CONFIG_PARAMETERS, {})
+                    self.ge_base_activation = Decimal(str(params.get("activation_percent", 8))) / 100
+                    self.ge_base_trail = Decimal(str(params.get("trail_percent", 4))) / 100
+                    break
 
         self.dry_run = False
         if CONSTANTS.CONFIG_DRY_RUN in self.config:
@@ -141,12 +170,203 @@ class CryptoBot:
                     self.overrides[ticker][attribute] = oc[attribute]
                     logger.info(f"{ticker}: setting override for {attribute}: {oc[attribute]}")
                         
+    def _build_dynamic_coin_list(self):
+        currency = self.currency.upper()
+
+        # 1. Load markets and filter active spot USD pairs
+        markets = self.exchange_service.execute_op(ticker_pair="", op=CONSTANTS.OP_LOAD_MARKETS)
+        if not markets:
+            logger.error("DCS: failed to load markets, falling back to static list")
+            return None
+
+        spot_pairs = []
+        for symbol, market in markets.items():
+            if (market.get('spot', False)
+                    and market.get('active', False)
+                    and market.get('quote', '') == currency):
+                spot_pairs.append(symbol)
+
+        if not spot_pairs:
+            logger.error("DCS: no active spot USD pairs found, falling back to static list")
+            return None
+
+        # 2. Fetch tickers for volume and spread data
+        tickers = self.exchange_service.execute_op(ticker_pair="", op=CONSTANTS.OP_FETCH_TICKERS)
+        if not tickers:
+            logger.error("DCS: failed to fetch tickers, falling back to static list")
+            return None
+
+        # 3. Filter and rank candidates
+        blacklist_set = set(c.upper() for c in self.crypto_blacklist)
+        candidates = []
+
+        for symbol in spot_pairs:
+            base = symbol.split('/')[0].upper()
+
+            # Remove blacklisted coins
+            if base in blacklist_set:
+                continue
+
+            ticker_data = tickers.get(symbol)
+            if not ticker_data:
+                continue
+
+            volume_usd = ticker_data.get('quoteVolume') or 0
+            bid = ticker_data.get('bid')
+            ask = ticker_data.get('ask')
+
+            # Filter by min volume
+            if volume_usd < self.dcs_min_volume:
+                continue
+
+            # Filter by max spread
+            if bid and ask and bid > 0:
+                spread_pct = ((ask - bid) / bid) * 100
+                if spread_pct > self.dcs_max_spread:
+                    continue
+
+            candidates.append((base, volume_usd))
+
+        # 4. Sort by volume descending, take top N
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        selected = [c[0] for c in candidates[:self.dcs_top_n]]
+
+        # 5. Merge in always_include coins
+        selected_set = set(selected)
+        for coin in self.dcs_always_include:
+            coin_upper = coin.upper()
+            if coin_upper not in selected_set and coin_upper not in blacklist_set:
+                selected.append(coin_upper)
+                selected_set.add(coin_upper)
+
+        # 6. Merge in coins with open positions from MongoDB, track demoted ones
+        demoted = set()
+        open_symbols = self.mongodb_service.distinct(self.current_positions_collection, 'symbol')
+        for symbol in open_symbols:
+            # symbol format is "BTC/USD", extract base
+            base = symbol.split('/')[0].upper()
+            if base not in selected_set:
+                selected.append(base)
+                selected_set.add(base)
+                demoted.add(base)
+                logger.info(f"DCS: including {base} due to open position (demoted)")
+
+        return selected, demoted
+
+    def _maybe_refresh_coin_list(self):
+        if not self.dcs_enabled:
+            return False
+
+        elapsed_minutes = self.get_elapse_time_mins(self.last_coin_refresh_time)
+        if self.last_coin_refresh_time != 0 and elapsed_minutes < self.dcs_refresh_interval:
+            return False
+
+        logger.info(f"DCS: refreshing coin list (elapsed: {elapsed_minutes:.1f} min)")
+        result = self._build_dynamic_coin_list()
+
+        if result is None:
+            logger.warning("DCS: build failed, keeping current list")
+            return False
+
+        new_list, demoted_set = result
+
+        old_set = set(self.supported_crypto_list)
+        new_set = set(new_list)
+
+        added = new_set - old_set
+        removed = old_set - new_set
+
+        if added:
+            logger.info(f"DCS: added coins: {sorted(added)}")
+        if removed:
+            logger.info(f"DCS: removed coins: {sorted(removed)}")
+
+        # Update demoted_coins tracking
+        now = time.time()
+        # Add newly demoted coins
+        for coin in demoted_set:
+            if coin not in self.demoted_coins:
+                self.demoted_coins[coin] = now
+                logger.info(f"DCS: {coin} demoted — graduated exit active")
+        # Remove coins that re-qualified (no longer demoted)
+        re_qualified = [c for c in self.demoted_coins if c not in demoted_set]
+        for coin in re_qualified:
+            del self.demoted_coins[coin]
+            logger.info(f"DCS: {coin} re-qualified — graduated exit removed")
+
+        self.supported_crypto_list = new_list
+        self.last_coin_refresh_time = time.time()
+        logger.info(f"DCS: active coin list ({len(new_list)}): {new_list}")
+        if self.demoted_coins:
+            logger.info(f"DCS: demoted coins: {list(self.demoted_coins.keys())}")
+        return True
+
+    def _check_graduated_exit(self, ticker_pair, avg_position, ticker_info, all_positions):
+        if not self.dcs_enabled or avg_position is None:
+            return TradeAction.NOOP
+
+        ticker = ticker_pair.split('/')[0].upper()
+        if ticker not in self.demoted_coins:
+            return TradeAction.NOOP
+
+        demotion_time = self.demoted_coins[ticker]
+        days_demoted = (time.time() - demotion_time) / 86400
+
+        # Force exit after max hold days
+        if days_demoted >= self.ge_max_hold_days:
+            logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit after {days_demoted:.1f} days demoted")
+            return TradeAction.SELL
+
+        # Tightening factor: starts at 0.5, decays linearly to 0.1 over max_hold_days
+        tightening_factor = Decimal(str(max(0.1, 0.5 - (0.4 * days_demoted / self.ge_max_hold_days))))
+
+        effective_activation = self.ge_base_activation * tightening_factor
+        effective_trail = self.ge_base_trail * tightening_factor
+
+        profit_pct = calculate_profit_percent(avg_position, ticker_info["bid"])
+        if profit_pct is None:
+            return TradeAction.NOOP
+
+        # If profit exceeds tightened activation, take it
+        if profit_pct >= effective_activation:
+            logger.info(f"{ticker_pair}: GRADUATED EXIT — taking profit {profit_pct*100:.2f}% "
+                       f"(tightened activation: {effective_activation*100:.2f}%, "
+                       f"days demoted: {days_demoted:.1f})")
+            return TradeAction.SELL
+
+        # Stop-loss active after configured grace period
+        if days_demoted >= self.ge_loss_active_after_days:
+            # Time-decay the max loss: starts at ge_max_loss_percent, tightens to half by max_hold_days
+            days_past_grace = days_demoted - self.ge_loss_active_after_days
+            remaining_days = self.ge_max_hold_days - self.ge_loss_active_after_days
+            if remaining_days > 0:
+                decay_factor = Decimal(str(max(0.5, 1.0 - (0.5 * days_past_grace / remaining_days))))
+            else:
+                decay_factor = Decimal("0.5")
+            effective_max_loss = self.ge_max_loss_percent * decay_factor
+
+            if profit_pct < CONSTANTS.ZERO and abs(profit_pct) >= effective_max_loss:
+                logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss at {profit_pct*100:.2f}% "
+                           f"(max loss: -{effective_max_loss*100:.2f}%, "
+                           f"days demoted: {days_demoted:.1f})")
+                return TradeAction.SELL
+
+        logger.debug(f"{ticker_pair}: graduated exit check — profit: {profit_pct*100:.2f}%, "
+                    f"activation: {effective_activation*100:.2f}%, "
+                    f"days demoted: {days_demoted:.1f}")
+        return TradeAction.NOOP
+
     def run(self):
         idx = 0
         N = len(self.supported_crypto_list)
         logger.info(f"Running for following cryto currencies: ${self.supported_crypto_list}")
 
         while True:
+
+            # Refresh coin list if DCS is enabled and interval has elapsed
+            if self._maybe_refresh_coin_list():
+                N = len(self.supported_crypto_list)
+                idx = 0
 
             if idx == N:
                 logger.debug(f"heartbeat!")
@@ -191,11 +411,18 @@ class CryptoBot:
                 logger.error(f"{ticker_pair}: error fetching ticker_info, skipping")
                 continue
             
-            profitable_positions_to_exit = find_profitable_trades(ticker_pair, 
-                                                                  avg_position, 
-                                                                  all_positions, 
-                                                                  ticker_info, 
-                                                                  take_profit_threshold, 
+            # Graduated exit check for demoted coins (before normal strategies)
+            graduated_action = self._check_graduated_exit(ticker_pair, avg_position, ticker_info, all_positions)
+            if graduated_action == TradeAction.SELL and all_positions:
+                self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+                time.sleep(self.crypto_currency_sleep_interval)
+                continue
+
+            profitable_positions_to_exit = find_profitable_trades(ticker_pair,
+                                                                  avg_position,
+                                                                  all_positions,
+                                                                  ticker_info,
+                                                                  take_profit_threshold,
                                                                   take_profit_evaluation_type)
             if profitable_positions_to_exit is not None:
                 logger.info(f"{ticker_pair}: number of profitable positions to exit: {len(profitable_positions_to_exit)}")
@@ -212,12 +439,10 @@ class CryptoBot:
             
             if trade_action == TradeAction.BUY:
                 logger.info(f"{ticker_pair}: BUY signal triggered")
-                self.handle_buy_order(ticker_pair, ticker_info)    
+                self.handle_buy_order(ticker_pair, ticker_info)
             elif trade_action == TradeAction.SELL:
-                logger.info(f'{ticker_pair}: SELL signal triggered but skipping selling until profit thresholds are met.')
-
-                # logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
-                # self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+                logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
+                self.handle_sell_order(ticker_pair, ticker_info, all_positions)
       
             time.sleep(self.crypto_currency_sleep_interval)
         

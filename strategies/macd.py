@@ -39,7 +39,7 @@ class MACD(BaseStrategy):
         macd = last_row[macd_key]
         macd_signal = last_row[macd_signal_key]
 
-        prev_row = candles_df.iloc[-3]
+        prev_row = candles_df.iloc[-2]
         prev_macd = prev_row[macd_key]
         prev_macd_signal = prev_row[macd_signal_key]
 

@@ -163,6 +163,19 @@
             ]
         }
     ],
+    "dynamic_coin_selection": {
+        "enabled": true,
+        "top_n": 10,
+        "min_24h_volume_usd": 1000000,
+        "max_spread_percent": 1.0,
+        "refresh_interval_minutes": 360,
+        "always_include": ["BTC", "SOL", "XRP"],
+        "graduated_exit": {
+            "max_hold_days": 28,
+            "max_loss_percent": 5.0,
+            "loss_active_after_days": 14
+        }
+    },
     "supported_crypto_currencies": [
         "POLY",
         "LPT",

@@ -22,7 +22,7 @@ def closed_positions_performance(mongo_connection_string, db_name, table_name):
 
     for position in closed_positions:
         sell_order = position[SELL_ORDER]
-        closed_positions = position[CLOSED_POSITIONS]
+        buy_lots = position[CLOSED_POSITIONS]
 
         ticker = sell_order["symbol"]
 
@@ -45,7 +45,7 @@ def closed_positions_performance(mongo_connection_string, db_name, table_name):
         ticker_object["sell_fee"] += sell_fee
         ticker_object["sell_amount"] += sell_amount
 
-        for cp in closed_positions:
+        for cp in buy_lots:
             ticker_object["buy_amount"] += Decimal(cp["cost"])
             ticker_object["buy_fee"] += Decimal(cp["fee"]["cost"])
 

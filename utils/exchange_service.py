@@ -118,6 +118,10 @@ class ExchangeService:
                 else:
                     logger.error(f"{ticker_pair}: invalid market_order_type:{market_order_type}")
                     return None
+            elif op == CONSTANTS.OP_LOAD_MARKETS:
+                return self.exchange_client.load_markets()
+            elif op == CONSTANTS.OP_FETCH_TICKERS:
+                return self.exchange_client.fetch_tickers()
             elif op == CONSTANTS.OP_FETCH_MY_TRADES:
                 return self.exchange_client.fetch_my_trades(ticker_pair, CONSTANTS.AUG_FIRST_TIMESTAMP_MS, 1000)
             elif op == CONSTANTS.OP_FETCH_TRANSACTIONS:
