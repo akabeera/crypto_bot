@@ -163,6 +163,12 @@
             ]
         }
     ],
+    "trend_confirmation": {
+        "enabled": true,
+        "short_ema_period": 10,
+        "long_ema_period": 30,
+        "downtrend_buy_threshold": 5
+    },
     "dynamic_coin_selection": {
         "enabled": true,
         "top_n": 10,

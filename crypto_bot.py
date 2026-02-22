@@ -94,7 +94,6 @@ class CryptoBot:
             self.ge_max_loss_percent = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_MAX_LOSS_PERCENT, CONSTANTS.DEFAULT_DCS_GE_MAX_LOSS_PERCENT))) / 100
             self.ge_loss_active_after_days = ge_config.get(CONSTANTS.CONFIG_DCS_GE_LOSS_ACTIVE_AFTER_DAYS, CONSTANTS.DEFAULT_DCS_GE_LOSS_ACTIVE_AFTER_DAYS)
             self.ge_underperform_threshold = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_UNDERPERFORM_THRESHOLD, CONSTANTS.DEFAULT_DCS_GE_UNDERPERFORM_THRESHOLD))) / 100
-            self.btc_price_at_demotion = {}  # coin -> BTC price when demoted
 
             # Extract base trailing stop params from strategy config for graduated exit
             self.ge_base_activation = Decimal("0.08")  # 8% default
@@ -105,6 +104,9 @@ class CryptoBot:
                     self.ge_base_activation = Decimal(str(params.get("activation_percent", 8))) / 100
                     self.ge_base_trail = Decimal(str(params.get("trail_percent", 4))) / 100
                     break
+
+        # Trend confirmation gate config
+        self.trend_config = self.config.get(CONSTANTS.CONFIG_TREND_CONFIRMATION, {})
 
         self.dry_run = False
         if CONSTANTS.CONFIG_DRY_RUN in self.config:
@@ -192,13 +194,21 @@ class CryptoBot:
             logger.error("DCS: no active spot USD pairs found, falling back to static list")
             return None
 
-        # 2. Fetch tickers for volume and spread data
+        # 2. Fetch tickers for volume data
         tickers = self.exchange_service.execute_op(ticker_pair="", op=CONSTANTS.OP_FETCH_TICKERS)
         if not tickers:
             logger.error("DCS: failed to fetch tickers, falling back to static list")
             return None
 
-        # 3. Filter and rank candidates
+        # 3. Fetch bids/asks for spread filtering (fetchTickers on Coinbase doesn't include bid/ask)
+        bids_asks = self.exchange_service.execute_op(
+            ticker_pair="", op=CONSTANTS.OP_FETCH_BIDS_ASKS, params={"symbols": spot_pairs}
+        )
+        if not bids_asks:
+            logger.warning("DCS: failed to fetch bids/asks, spread filter will be skipped")
+            bids_asks = {}
+
+        # 4. Filter and rank candidates
         blacklist_set = set(c.upper() for c in self.crypto_blacklist)
         candidates = []
 
@@ -213,27 +223,48 @@ class CryptoBot:
             if not ticker_data:
                 continue
 
+            # quoteVolume/baseVolume are None on Coinbase; extract from raw info
             volume_usd = ticker_data.get('quoteVolume') or 0
-            bid = ticker_data.get('bid')
-            ask = ticker_data.get('ask')
+            if not volume_usd:
+                info = ticker_data.get('info', {})
+                # Coinbase returns approximate_quote_24h_volume (USD volume) in raw response
+                raw_quote_vol = info.get('approximate_quote_24h_volume')
+                if raw_quote_vol:
+                    try:
+                        volume_usd = float(raw_quote_vol)
+                    except (ValueError, TypeError):
+                        volume_usd = 0
+                # Fallback: derive from base volume * last price
+                if not volume_usd:
+                    raw_base_vol = info.get('volume_24h')
+                    last_price = ticker_data.get('last') or 0
+                    if raw_base_vol and last_price:
+                        try:
+                            volume_usd = float(raw_base_vol) * float(last_price)
+                        except (ValueError, TypeError):
+                            volume_usd = 0
 
             # Filter by min volume
             if volume_usd < self.dcs_min_volume:
                 continue
 
-            # Filter by max spread
-            if bid and ask and bid > 0:
-                spread_pct = ((ask - bid) / bid) * 100
-                if spread_pct > self.dcs_max_spread:
-                    continue
+            # Filter by max spread using bids/asks data
+            ba_data = bids_asks.get(symbol)
+            if ba_data:
+                bid = ba_data.get('bid')
+                ask = ba_data.get('ask')
+                if bid and ask and bid > 0:
+                    spread_pct = ((ask - bid) / bid) * 100
+                    if spread_pct > self.dcs_max_spread:
+                        continue
 
             candidates.append((base, volume_usd))
 
-        # 4. Sort by volume descending, take top N
+        # 5. Sort by volume descending, take top N
         candidates.sort(key=lambda x: x[1], reverse=True)
         selected = [c[0] for c in candidates[:self.dcs_top_n]]
 
-        # 5. Merge in always_include coins
+        # 6. Merge in always_include coins
         selected_set = set(selected)
         for coin in self.dcs_always_include:
             coin_upper = coin.upper()
@@ -241,7 +272,7 @@ class CryptoBot:
                 selected.append(coin_upper)
                 selected_set.add(coin_upper)
 
-        # 6. Merge in coins with open positions from MongoDB, track demoted ones
+        # 7. Merge in coins with open positions from MongoDB, track demoted ones
         demoted = set()
         open_symbols = self.mongodb_service.distinct(self.current_positions_collection, 'symbol')
         for symbol in open_symbols:
@@ -285,25 +316,15 @@ class CryptoBot:
 
         # Update demoted_coins tracking
         now = time.time()
-        # Snapshot BTC price for market-relative loss calculations
-        btc_ticker = self.exchange_service.execute_op(ticker_pair=f"BTC/{self.currency}", op=CONSTANTS.OP_FETCH_TICKER)
-        btc_price_now = None
-        if btc_ticker and btc_ticker.get("last"):
-            btc_price_now = Decimal(str(btc_ticker["last"]))
         # Add newly demoted coins
         for coin in demoted_set:
             if coin not in self.demoted_coins:
                 self.demoted_coins[coin] = now
-                if btc_price_now is not None:
-                    self.btc_price_at_demotion[coin] = btc_price_now
-                    logger.info(f"DCS: {coin} demoted — graduated exit active (BTC snapshot: {btc_price_now})")
-                else:
-                    logger.info(f"DCS: {coin} demoted — graduated exit active (BTC snapshot unavailable)")
+                logger.info(f"DCS: {coin} demoted — graduated exit active")
         # Remove coins that re-qualified (no longer demoted)
         re_qualified = [c for c in self.demoted_coins if c not in demoted_set]
         for coin in re_qualified:
             del self.demoted_coins[coin]
-            self.btc_price_at_demotion.pop(coin, None)
             logger.info(f"DCS: {coin} re-qualified — graduated exit removed")
 
         self.supported_crypto_list = new_list
@@ -312,6 +333,55 @@ class CryptoBot:
         if self.demoted_coins:
             logger.info(f"DCS: demoted coins: {list(self.demoted_coins.keys())}")
         return True
+
+    def _get_btc_change_since_positions(self, all_positions):
+        """Calculate BTC's % change from the cost-weighted avg position open time to now.
+
+        Uses position timestamps weighted by cost to find the representative open time,
+        fetches a BTC daily candle from that time, and compares to current BTC price.
+        Returns (btc_change_pct, btc_price_then, btc_price_now) or (None, None, None) on failure.
+        """
+        # Compute cost-weighted average timestamp across all positions
+        total_cost = Decimal("0")
+        weighted_ts_sum = Decimal("0")
+        for pos in all_positions:
+            ts = pos.get("timestamp")
+            cost = pos.get("cost", 0)
+            if ts and cost:
+                cost_d = Decimal(str(cost))
+                total_cost += cost_d
+                weighted_ts_sum += Decimal(str(ts)) * cost_d
+
+        if total_cost == CONSTANTS.ZERO:
+            return None, None, None
+
+        avg_timestamp_ms = int(weighted_ts_sum / total_cost)
+
+        # Fetch a BTC daily candle starting from the avg position time
+        btc_pair = f"BTC/{self.currency}"
+        btc_ohlcv = self.exchange_service.execute_op(
+            ticker_pair=btc_pair, op=CONSTANTS.OP_FETCH_OHLCV,
+            params={CONSTANTS.PARAM_TIMEFRAME: "1d", CONSTANTS.PARAM_SINCE: avg_timestamp_ms}
+        )
+        if not btc_ohlcv or len(btc_ohlcv) == 0:
+            return None, None, None
+
+        # First candle's close is BTC price at position open time
+        btc_price_then = Decimal(str(btc_ohlcv[0][4]))  # [4] = close
+
+        # Get current BTC price
+        btc_ticker = self.exchange_service.execute_op(
+            ticker_pair=btc_pair, op=CONSTANTS.OP_FETCH_TICKER
+        )
+        if not btc_ticker or not btc_ticker.get("last"):
+            return None, None, None
+
+        btc_price_now = Decimal(str(btc_ticker["last"]))
+        if btc_price_then == CONSTANTS.ZERO:
+            return None, None, None
+
+        btc_change_pct = (btc_price_now - btc_price_then) / btc_price_then
+        return btc_change_pct, btc_price_then, btc_price_now
 
     def _check_graduated_exit(self, ticker_pair, avg_position, ticker_info, all_positions):
         if not self.dcs_enabled or avg_position is None:
@@ -340,26 +410,18 @@ class CryptoBot:
                        f"days demoted: {days_demoted:.1f})")
             return TradeAction.SELL
 
-        # MARKET-RELATIVE LOSS CHECK — only trigger loss-side exits when coin underperforms BTC
+        # MARKET-RELATIVE LOSS CHECK — compare coin performance to BTC over the same holding period
         relative_loss = None
         use_absolute_fallback = False
 
-        btc_snapshot = self.btc_price_at_demotion.get(ticker)
-        if btc_snapshot is not None:
-            btc_ticker = self.exchange_service.execute_op(
-                ticker_pair=f"BTC/{self.currency}", op=CONSTANTS.OP_FETCH_TICKER
-            )
-            if btc_ticker and btc_ticker.get("last"):
-                btc_current = Decimal(str(btc_ticker["last"]))
-                btc_change_pct = (btc_current - btc_snapshot) / btc_snapshot
-                relative_loss = profit_pct - btc_change_pct
-                logger.debug(f"{ticker_pair}: market-relative check — coin: {profit_pct*100:.2f}%, "
-                            f"BTC: {btc_change_pct*100:.2f}%, relative: {relative_loss*100:.2f}%")
-            else:
-                logger.warning(f"{ticker_pair}: failed to fetch current BTC price, falling back to absolute loss")
-                use_absolute_fallback = True
+        btc_change_pct, btc_then, btc_now = self._get_btc_change_since_positions(all_positions)
+        if btc_change_pct is not None:
+            relative_loss = profit_pct - btc_change_pct
+            logger.debug(f"{ticker_pair}: market-relative check — coin: {profit_pct*100:.2f}%, "
+                        f"BTC: {btc_change_pct*100:.2f}% (${btc_then} → ${btc_now}), "
+                        f"relative: {relative_loss*100:.2f}%")
         else:
-            logger.warning(f"{ticker_pair}: no BTC snapshot at demotion, falling back to absolute loss")
+            logger.warning(f"{ticker_pair}: failed to fetch BTC benchmark, falling back to absolute loss")
             use_absolute_fallback = True
 
         coin_underperforming = False
@@ -388,8 +450,12 @@ class CryptoBot:
                                f"threshold: -{self.ge_underperform_threshold*100:.2f}%)")
                 return TradeAction.SELL
             else:
-                logger.info(f"{ticker_pair}: GRADUATED EXIT — max hold days reached but coin is not "
-                           f"underperforming market, holding (relative: {relative_loss*100:.2f}%)")
+                if use_absolute_fallback:
+                    logger.info(f"{ticker_pair}: GRADUATED EXIT — max hold days reached, "
+                               f"coin not in loss, holding (profit: {profit_pct*100:.2f}%)")
+                else:
+                    logger.info(f"{ticker_pair}: GRADUATED EXIT — max hold days reached but coin is not "
+                               f"underperforming market, holding (relative: {relative_loss*100:.2f}%)")
 
         # Stop-loss active after configured grace period — market-relative
         if days_demoted >= self.ge_loss_active_after_days and coin_underperforming:
@@ -410,7 +476,7 @@ class CryptoBot:
                                f"days demoted: {days_demoted:.1f})")
                 else:
                     logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss on relative loss {relative_loss*100:.2f}% "
-                               f"(coin: {profit_pct*100:.2f}%, BTC: {(profit_pct - relative_loss)*100:.2f}%, "
+                               f"(coin: {profit_pct*100:.2f}%, BTC: {btc_change_pct*100:.2f}%, "
                                f"max loss: -{effective_max_loss*100:.2f}%, "
                                f"days demoted: {days_demoted:.1f})")
                 return TradeAction.SELL
@@ -496,12 +562,13 @@ class CryptoBot:
                 continue
 
             self.handle_cooldown(ticker_pair)
-            trade_action = execute_strategies(ticker_pair, 
-                                              self.strategies, 
-                                              avg_position, 
-                                              ticker_info, 
-                                              candles_df, 
-                                              self.strategies_overrides)
+            trade_action = execute_strategies(ticker_pair,
+                                              self.strategies,
+                                              avg_position,
+                                              ticker_info,
+                                              candles_df,
+                                              self.strategies_overrides,
+                                              trend_config=self.trend_config)
             
             if trade_action == TradeAction.BUY:
                 logger.info(f"{ticker_pair}: BUY signal triggered")
@@ -680,7 +747,7 @@ class CryptoBot:
             if volatility_pct > self.volatility_thresholds["high"]:
                 return '15m'
             elif volatility_pct < self.volatility_thresholds["low"]:
-                return '4h'
+                return '6h'
             
         except Exception as e:
             logger.error(f"{ticker_pair}: error calculating volatility: {e}")

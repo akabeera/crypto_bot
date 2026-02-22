@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.cdp.coinbase.com)",
+      "Bash(pip show:*)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }

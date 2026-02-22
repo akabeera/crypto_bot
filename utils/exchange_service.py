@@ -48,7 +48,7 @@ class ExchangeService:
 
     def execute_op(self, ticker_pair: str, op: str, params = {}):
         try:
-            if not self.exchange_client.has[op]:
+            if not self.exchange_client.has.get(op, True):
                 logger.warn(f"{ticker_pair}: exchange does not support op: {op}")
                 return None
                         
@@ -63,9 +63,8 @@ class ExchangeService:
                 timeframe = "1m"
                 if CONSTANTS.PARAM_TIMEFRAME in params:
                     timeframe = params[CONSTANTS.PARAM_TIMEFRAME]
-                if CONSTANTS.PARAM_SINCE in params:
-                    since = params[CONSTANTS.PARAM_SINCE]
-                return self.exchange_client.fetch_ohlcv(ticker_pair, timeframe)
+                since = params.get(CONSTANTS.PARAM_SINCE, None)
+                return self.exchange_client.fetch_ohlcv(ticker_pair, timeframe, since=since)
             elif op == CONSTANTS.OP_FETCH_ORDER: 
                 if CONSTANTS.PARAM_ORDER_ID not in params or params[CONSTANTS.PARAM_ORDER_ID] is None:
                     logger.error(f"{ticker_pair}: missing or invalid 'order_id' param is fetchOrder")
@@ -122,6 +121,9 @@ class ExchangeService:
                 return self.exchange_client.load_markets()
             elif op == CONSTANTS.OP_FETCH_TICKERS:
                 return self.exchange_client.fetch_tickers()
+            elif op == CONSTANTS.OP_FETCH_BIDS_ASKS:
+                symbols = params.get('symbols', None) if params else None
+                return self.exchange_client.fetch_bids_asks(symbols)
             elif op == CONSTANTS.OP_FETCH_MY_TRADES:
                 return self.exchange_client.fetch_my_trades(ticker_pair, CONSTANTS.AUG_FIRST_TIMESTAMP_MS, 1000)
             elif op == CONSTANTS.OP_FETCH_TRANSACTIONS:

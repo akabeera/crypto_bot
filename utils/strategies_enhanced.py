@@ -1,4 +1,5 @@
 import pandas as pd
+import talib
 import utils.constants as CONSTANTS
 
 from utils.trading import TradeAction
@@ -72,12 +73,13 @@ def init_strategies_overrides(config, mongodb_service=None) -> dict[str, dict[st
     return strategies_overrides
 
 
-def execute_strategies_scoring(ticker_pair: str, 
-                               strategies: dict[int, BaseStrategy], 
-                               avg_position, 
-                               ticker_info, 
-                               candles_df: pd.DataFrame, 
-                               strategies_overrides: dict[str, dict[str, BaseStrategy]] = None) -> TradeAction:
+def execute_strategies_scoring(ticker_pair: str,
+                               strategies: dict[int, BaseStrategy],
+                               avg_position,
+                               ticker_info,
+                               candles_df: pd.DataFrame,
+                               strategies_overrides: dict[str, dict[str, BaseStrategy]] = None,
+                               trend_config: dict = None) -> TradeAction:
     """
     ENHANCED: Execute strategies using a scoring system instead of all-must-agree.
     
@@ -166,21 +168,44 @@ def execute_strategies_scoring(ticker_pair: str,
             else:  # NOOP
                 logger.debug(f"{ticker_pair}: {curr_strat_name} (P{priority}) -> NOOP")
     
+    # Trend confirmation gate
+    in_downtrend = False
+    if trend_config and trend_config.get(CONSTANTS.CONFIG_TC_ENABLED, False):
+        short_period = trend_config.get(CONSTANTS.CONFIG_TC_SHORT_EMA, CONSTANTS.DEFAULT_TC_SHORT_EMA)
+        long_period = trend_config.get(CONSTANTS.CONFIG_TC_LONG_EMA, CONSTANTS.DEFAULT_TC_LONG_EMA)
+        close = candles_df['close'].astype(float)
+        if len(close) >= long_period:
+            ema_short = talib.EMA(close, timeperiod=short_period)
+            ema_long = talib.EMA(close, timeperiod=long_period)
+            current_price = close.iloc[-1]
+            ema_short_val = ema_short.iloc[-1]
+            ema_long_val = ema_long.iloc[-1]
+            in_downtrend = current_price < ema_short_val and ema_short_val < ema_long_val
+            logger.debug(f"{ticker_pair}: trend gate — price: {current_price:.4f}, "
+                        f"EMA{short_period}: {ema_short_val:.4f}, EMA{long_period}: {ema_long_val:.4f}, "
+                        f"downtrend: {in_downtrend}")
+
     # Decision logic
     logger.debug(f"{ticker_pair}: Score Summary - BUY: {buy_score}, SELL: {sell_score}, HOLD_LOCK: {hold_lock}")
-    
+
     # Thresholds for action (can be tuned)
     # Priority 1 strategy alone can trigger (weight=3)
     # Two Priority 2 strategies can trigger (weight=2*2=4)
-    action_threshold = 3
-    
+    buy_threshold = 3
+    sell_threshold = 3
+
+    if in_downtrend:
+        downtrend_threshold = trend_config.get(CONSTANTS.CONFIG_TC_DOWNTREND_BUY_THRESHOLD, CONSTANTS.DEFAULT_TC_DOWNTREND_BUY_THRESHOLD)
+        logger.info(f"{ticker_pair}: downtrend detected, raising buy threshold from {buy_threshold} to {downtrend_threshold}")
+        buy_threshold = downtrend_threshold
+
     # Check BUY signals (HOLD lock doesn't block buys!)
-    if buy_score >= action_threshold and buy_score > sell_score:
+    if buy_score >= buy_threshold and buy_score > sell_score:
         logger.info(f"{ticker_pair}: BUY signal triggered (score: {buy_score} vs sell: {sell_score})")
         return TradeAction.BUY
-    
+
     # Check SELL signals (HOLD lock DOES block sells to prevent selling at loss)
-    if sell_score >= action_threshold and sell_score > buy_score:
+    if sell_score >= sell_threshold and sell_score > buy_score:
         if hold_lock:
             logger.info(f"{ticker_pair}: HOLD lock prevents SELL (sell_score: {sell_score})")
             return TradeAction.HOLD
@@ -191,22 +216,25 @@ def execute_strategies_scoring(ticker_pair: str,
     return TradeAction.NOOP
 
 
-def execute_strategies(ticker_pair: str, 
-                        strategies: dict[int, BaseStrategy], 
-                        avg_position, 
-                        ticker_info, 
-                        candles_df: pd.DataFrame, 
+def execute_strategies(ticker_pair: str,
+                        strategies: dict[int, BaseStrategy],
+                        avg_position,
+                        ticker_info,
+                        candles_df: pd.DataFrame,
                         strategies_overrides: dict[str, dict[str, BaseStrategy]] = None,
-                        use_scoring: bool = True) -> TradeAction:
+                        use_scoring: bool = True,
+                        trend_config: dict = None) -> TradeAction:
     """
     Main entry point for strategy execution.
-    
+
     Args:
         use_scoring: If True, uses enhanced scoring system. If False, uses legacy all-must-agree.
+        trend_config: Trend confirmation gate config (EMA periods + downtrend threshold).
     """
     if use_scoring:
-        return execute_strategies_scoring(ticker_pair, strategies, avg_position, 
-                                         ticker_info, candles_df, strategies_overrides)
+        return execute_strategies_scoring(ticker_pair, strategies, avg_position,
+                                         ticker_info, candles_df, strategies_overrides,
+                                         trend_config)
     else:
         return execute_strategies_legacy(ticker_pair, strategies, avg_position,
                                         ticker_info, candles_df, strategies_overrides)
