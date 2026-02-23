@@ -163,11 +163,24 @@
             ]
         }
     ],
+    "sell_only_currencies": [
+        "BNT",
+        "OXT",
+        "QNT",
+        "SNX",
+        "VGX",
+        "WCFG",
+        "AMP"
+    ],
     "trend_confirmation": {
         "enabled": true,
         "short_ema_period": 10,
         "long_ema_period": 30,
-        "downtrend_buy_threshold": 5
+        "severity_tiers": [
+            {"max_gap_pct": 1.0, "buy_threshold": 5},
+            {"max_gap_pct": 3.0, "buy_threshold": 7},
+            {"max_gap_pct": 100.0, "buy_threshold": 9}
+        ]
     },
     "dynamic_coin_selection": {
         "enabled": true,

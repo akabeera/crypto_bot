@@ -105,6 +105,11 @@ class CryptoBot:
                     self.ge_base_trail = Decimal(str(params.get("trail_percent", 4))) / 100
                     break
 
+        # Sell-only currencies
+        self.sell_only_currencies = set(
+            c.upper() for c in self.config.get(CONSTANTS.CONFIG_SELL_ONLY_CURRENCIES, [])
+        )
+
         # Trend confirmation gate config
         self.trend_config = self.config.get(CONSTANTS.CONFIG_TREND_CONFIRMATION, {})
 
@@ -124,6 +129,9 @@ class CryptoBot:
         self.exchange_service = ExchangeService(exchange_config, self.dry_run)
 
         self.init()
+
+        if self.dcs_enabled:
+            self._load_dcs_state()
 
     def init(self):
         (self.take_profit_threshold, self.take_profit_evaluation_type) = self.init_take_profits_config(self.config[CONSTANTS.CONFIG_TAKE_PROFITS])
@@ -174,6 +182,45 @@ class CryptoBot:
                     self.overrides[ticker][attribute] = oc[attribute]
                     logger.info(f"{ticker}: setting override for {attribute}: {oc[attribute]}")
                         
+    def _load_dcs_state(self):
+        try:
+            docs = self.mongodb_service.query(
+                CONSTANTS.CONFIG_DCS_STATE_COLLECTION,
+                {"strategy": CONSTANTS.CONFIG_DCS_STATE_STRATEGY_KEY}
+            )
+            if docs and len(docs) > 0:
+                state = docs[0]
+                self.last_coin_refresh_time = state.get("last_coin_refresh_time", 0)
+                self.demoted_coins = state.get("demoted_coins", {})
+                saved_list = state.get("supported_crypto_list", [])
+                if saved_list:
+                    self.supported_crypto_list = saved_list
+                logger.info(f"DCS: restored state — last refresh: {self.last_coin_refresh_time}, "
+                           f"demoted: {list(self.demoted_coins.keys())}, "
+                           f"coins: {len(self.supported_crypto_list)}")
+            else:
+                logger.info("DCS: no saved state found, starting fresh")
+        except Exception as e:
+            logger.error(f"DCS: failed to load state: {e}")
+
+    def _save_dcs_state(self):
+        try:
+            state = {
+                "strategy": CONSTANTS.CONFIG_DCS_STATE_STRATEGY_KEY,
+                "last_coin_refresh_time": self.last_coin_refresh_time,
+                "demoted_coins": self.demoted_coins,
+                "supported_crypto_list": self.supported_crypto_list
+            }
+            self.mongodb_service.replace_one(
+                CONSTANTS.CONFIG_DCS_STATE_COLLECTION,
+                state,
+                {"strategy": CONSTANTS.CONFIG_DCS_STATE_STRATEGY_KEY},
+                upsert=True
+            )
+            logger.debug("DCS: state saved to MongoDB")
+        except Exception as e:
+            logger.error(f"DCS: failed to save state: {e}")
+
     def _build_dynamic_coin_list(self):
         currency = self.currency.upper()
 
@@ -332,6 +379,7 @@ class CryptoBot:
         logger.info(f"DCS: active coin list ({len(new_list)}): {new_list}")
         if self.demoted_coins:
             logger.info(f"DCS: demoted coins: {list(self.demoted_coins.keys())}")
+        self._save_dcs_state()
         return True
 
     def _get_btc_change_since_positions(self, all_positions):
@@ -571,8 +619,11 @@ class CryptoBot:
                                               trend_config=self.trend_config)
             
             if trade_action == TradeAction.BUY:
-                logger.info(f"{ticker_pair}: BUY signal triggered")
-                self.handle_buy_order(ticker_pair, ticker_info)
+                if ticker.upper() in self.sell_only_currencies:
+                    logger.info(f"{ticker_pair}: sell-only mode, skipping BUY signal")
+                else:
+                    logger.info(f"{ticker_pair}: BUY signal triggered")
+                    self.handle_buy_order(ticker_pair, ticker_info)
             elif trade_action == TradeAction.SELL:
                 logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
                 self.handle_sell_order(ticker_pair, ticker_info, all_positions)

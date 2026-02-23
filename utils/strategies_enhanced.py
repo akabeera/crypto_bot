@@ -195,8 +195,15 @@ def execute_strategies_scoring(ticker_pair: str,
     sell_threshold = 3
 
     if in_downtrend:
-        downtrend_threshold = trend_config.get(CONSTANTS.CONFIG_TC_DOWNTREND_BUY_THRESHOLD, CONSTANTS.DEFAULT_TC_DOWNTREND_BUY_THRESHOLD)
-        logger.info(f"{ticker_pair}: downtrend detected, raising buy threshold from {buy_threshold} to {downtrend_threshold}")
+        ema_gap_pct = ((ema_long_val - ema_short_val) / ema_long_val) * 100
+        severity_tiers = trend_config.get(CONSTANTS.CONFIG_TC_SEVERITY_TIERS, [])
+        downtrend_threshold = buy_threshold  # safe fallback if no tiers configured
+        for tier in severity_tiers:
+            if ema_gap_pct <= tier[CONSTANTS.CONFIG_TC_SEVERITY_TIER_MAX_GAP]:
+                downtrend_threshold = tier[CONSTANTS.CONFIG_TC_SEVERITY_TIER_BUY_THRESHOLD]
+                break
+        logger.info(f"{ticker_pair}: downtrend detected — gap: {ema_gap_pct:.1f}%, "
+                    f"raising buy threshold {buy_threshold} -> {downtrend_threshold}")
         buy_threshold = downtrend_threshold
 
     # Check BUY signals (HOLD lock doesn't block buys!)
