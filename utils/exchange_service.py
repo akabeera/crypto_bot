@@ -46,6 +46,10 @@ class ExchangeService:
         if CONSTANTS.CONFIG_LIMIT_ORDER_PERIOD_TIME_LIMIT in exchange_config:
             self.limit_order_period_time_limit = exchange_config[CONSTANTS.CONFIG_LIMIT_ORDER_PERIOD_TIME_LIMIT]
 
+        self.limit_order_max_resets = CONSTANTS.CONFIG_DEFAULT_LIMIT_ORDER_MAX_RESETS
+        if CONSTANTS.CONFIG_LIMIT_ORDER_MAX_RESETS in exchange_config:
+            self.limit_order_max_resets = exchange_config[CONSTANTS.CONFIG_LIMIT_ORDER_MAX_RESETS]
+
     def execute_op(self, ticker_pair: str, op: str, params = {}):
         try:
             if not self.exchange_client.has.get(op, True):
@@ -151,6 +155,21 @@ class ExchangeService:
             logger.error(f"{ticker_pair}: {op} exchange error: {e}")
             return None
         
+    def fetch_all_orders(self, ticker_pair, since_ms=None):
+        """Fetch all orders for a ticker pair, paginating through results."""
+        all_orders = []
+        since = since_ms or CONSTANTS.AUG_FIRST_TIMESTAMP_MS
+        limit = CONSTANTS.NUM_ORDERS_LIMIT
+        while True:
+            batch = self.exchange_client.fetch_orders(ticker_pair, since, limit)
+            if not batch:
+                break
+            all_orders.extend(batch)
+            if len(batch) < limit:
+                break
+            since = batch[-1]['timestamp'] + 1
+        return all_orders
+
     def create_order(self, ticker_pair: str, shares: float, type: str, side: str, price: float = None):
         if self.dry_run:
             logger.info(f"{ticker_pair}: dry_run enaled, skiping create_order")
@@ -165,10 +184,11 @@ class ExchangeService:
         order = None
         status = order_results['status']
         idx = 0
+        num_resets = 0
         filled = CONSTANTS.ZERO
         while (status != 'closed'):
             prev_filled = filled
-            
+
             if idx == self.limit_order_num_periods_limit:
 
                 if order is not None:
@@ -179,17 +199,13 @@ class ExchangeService:
                     self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
                     return None
 
-                idx = 0
-                
-                # if filled > prev_filled:
-                #     logger.info(f"{ticker_pair}: order is still being filled, extending time")
-                #     idx = 0
-                #     continue
+                num_resets += 1
+                if num_resets >= self.limit_order_max_resets:
+                    logger.warn(f"{ticker_pair}: limit order partially filled after {num_resets} resets, returning as pending (filled: {filled})")
+                    return order
 
-                # logger.warn(f"{ticker_pair}: limit order not fulfilled within time limit, cancelling order")
-                # self.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_CANCEL_ORDER, params=params)
-                # logger.warn(f"{ticker_pair}: cancelled_order, last order status: {order}")
-                
+                idx = 0
+
             logger.info(f"{ticker_pair}: waiting for limit_order to be fulfilled, time: {idx}")
 
             time.sleep(self.limit_order_period_time_limit)
@@ -197,7 +213,7 @@ class ExchangeService:
             if (order == None):
                 logger.warn("{ticker_pair}: something went wrong fetching order_id, retrying")
                 continue
-            
+
             idx += 1
             status = order['status']
 

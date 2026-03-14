@@ -54,7 +54,7 @@
             "request": "launch",
             "module": "admin.main",
             "console": "integratedTerminal",
-            "args": ["--ticker=ASM/USD", "--op=add_sell_order", "--orders=34c9697b-92b0-437f-84c8-0417aa06dcfb", "--lot_ids=91940594-4039-4756-ae49-492b181f8244,9f270a00-a971-4e4a-9bfd-a5ba05477b64,d8c43269-6fa8-4b5c-8601-1915f168d835"],
+            "args": ["--ticker=IOTX/USD", "--op=add_sell_order", "--orders=7a1580d7-0890-4206-a56d-047f2f10db6b"],
             "justMyCode": false
         },
         {

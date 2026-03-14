@@ -8,6 +8,32 @@ from strategies.strategy_factory import strategy_factory
 
 from utils.logger import logger
 
+
+def is_in_uptrend(candles_df: pd.DataFrame, trend_config: dict) -> bool:
+    """
+    Check if the market is in an uptrend based on EMA alignment.
+    Returns True when price > EMA_short > EMA_long (bullish alignment).
+    Returns False if trend_config is disabled, data insufficient, or not in uptrend.
+    """
+    if not trend_config or not trend_config.get(CONSTANTS.CONFIG_TC_ENABLED, False):
+        return False
+
+    short_period = trend_config.get(CONSTANTS.CONFIG_TC_SHORT_EMA, CONSTANTS.DEFAULT_TC_SHORT_EMA)
+    long_period = trend_config.get(CONSTANTS.CONFIG_TC_LONG_EMA, CONSTANTS.DEFAULT_TC_LONG_EMA)
+    close = candles_df['close'].astype(float)
+
+    if len(close) < long_period:
+        return False
+
+    ema_short = talib.EMA(close, timeperiod=short_period)
+    ema_long = talib.EMA(close, timeperiod=long_period)
+    current_price = close.iloc[-1]
+    ema_short_val = ema_short.iloc[-1]
+    ema_long_val = ema_long.iloc[-1]
+
+    return current_price > ema_short_val and ema_short_val > ema_long_val
+
+
 def init_strategies(config, mongodb_service=None) -> dict[int, BaseStrategy]:
     """
     Initialize strategies from config, organized by priority.

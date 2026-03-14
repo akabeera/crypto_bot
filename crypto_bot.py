@@ -12,7 +12,7 @@ from utils.trading import TradeAction, TakeProfitEvaluationType, find_profitable
 from utils.mongodb_service import MongoDBService
 from utils.exchange_service import ExchangeService
 # from utils.strategies import execute_strategies, init_strategies, init_strategies_overrides
-from utils.strategies_enhanced import execute_strategies, init_strategies, init_strategies_overrides
+from utils.strategies_enhanced import execute_strategies, init_strategies, init_strategies_overrides, is_in_uptrend
 
 from utils.logger import logger
 
@@ -94,6 +94,7 @@ class CryptoBot:
             self.ge_max_loss_percent = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_MAX_LOSS_PERCENT, CONSTANTS.DEFAULT_DCS_GE_MAX_LOSS_PERCENT))) / 100
             self.ge_loss_active_after_days = ge_config.get(CONSTANTS.CONFIG_DCS_GE_LOSS_ACTIVE_AFTER_DAYS, CONSTANTS.DEFAULT_DCS_GE_LOSS_ACTIVE_AFTER_DAYS)
             self.ge_underperform_threshold = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_UNDERPERFORM_THRESHOLD, CONSTANTS.DEFAULT_DCS_GE_UNDERPERFORM_THRESHOLD))) / 100
+            self.ge_btc_downturn_threshold = Decimal(str(ge_config.get(CONSTANTS.CONFIG_DCS_GE_BTC_DOWNTURN_THRESHOLD, CONSTANTS.DEFAULT_DCS_GE_BTC_DOWNTURN_THRESHOLD))) / 100
 
             # Extract base trailing stop params from strategy config for graduated exit
             self.ge_base_activation = Decimal("0.08")  # 8% default
@@ -113,6 +114,19 @@ class CryptoBot:
         # Trend confirmation gate config
         self.trend_config = self.config.get(CONSTANTS.CONFIG_TREND_CONFIRMATION, {})
 
+        # Profit deferral config
+        pd_config = self.config.get(CONSTANTS.CONFIG_PROFIT_DEFERRAL, {})
+        self.profit_deferral_enabled = pd_config.get(CONSTANTS.CONFIG_PD_ENABLED, False)
+        self.pd_confirmation_timeframe = pd_config.get(
+            CONSTANTS.CONFIG_PD_CONFIRMATION_TIMEFRAME,
+            CONSTANTS.DEFAULT_PD_CONFIRMATION_TIMEFRAME
+        )
+        self.pd_max_deferral_minutes = pd_config.get(
+            CONSTANTS.CONFIG_PD_MAX_DEFERRAL_MINUTES,
+            CONSTANTS.DEFAULT_PD_MAX_DEFERRAL_MINUTES
+        )
+        self.deferred_profits = {}  # {ticker_pair: {"profit_pct": Decimal, "time": float}}
+
         self.dry_run = False
         if CONSTANTS.CONFIG_DRY_RUN in self.config:
             self.dry_run = self.config[CONSTANTS.CONFIG_DRY_RUN]
@@ -123,12 +137,17 @@ class CryptoBot:
         self.mongodb_db_name = db_config[CONSTANTS.CONFIG_DB_NAME]
         self.current_positions_collection = db_config[CONSTANTS.CONFIG_DB_CURRENT_POSITIONS_COLLECTION]
         self.closed_positions_collection = db_config[CONSTANTS.CONFIG_DB_CLOSED_POSITIONS_COLLECTION]
+        self.pending_orders_collection = db_config.get(
+            CONSTANTS.CONFIG_PENDING_ORDERS_COLLECTION,
+            CONSTANTS.DEFAULT_PENDING_ORDERS_COLLECTION
+        )
         self.mongodb_service = MongoDBService(db_connection_string, self.mongodb_db_name)
 
         exchange_config = self.config[CONSTANTS.CONFIG_EXCHANGE]
         self.exchange_service = ExchangeService(exchange_config, self.dry_run)
 
         self.init()
+        self._reconcile_pending_orders()
 
         if self.dcs_enabled:
             self._load_dcs_state()
@@ -195,7 +214,8 @@ class CryptoBot:
                 saved_list = state.get("supported_crypto_list", [])
                 if saved_list:
                     self.supported_crypto_list = saved_list
-                logger.info(f"DCS: restored state — last refresh: {self.last_coin_refresh_time}, "
+                elapsed_mins = self.get_elapse_time_mins(self.last_coin_refresh_time) if self.last_coin_refresh_time else 0
+                logger.info(f"DCS: restored state — last refresh: {elapsed_mins:.1f} mins ago, "
                            f"demoted: {list(self.demoted_coins.keys())}, "
                            f"coins: {len(self.supported_crypto_list)}")
             else:
@@ -431,6 +451,77 @@ class CryptoBot:
         btc_change_pct = (btc_price_now - btc_price_then) / btc_price_then
         return btc_change_pct, btc_price_then, btc_price_now
 
+    def _should_defer_profit_taking(self, ticker_pair, candles_df, profitable_positions, ticker_info):
+        """
+        Decide whether to defer take-profit selling based on:
+        1. Primary timeframe uptrend (existing candles)
+        2. Short-timeframe confirmation (e.g. 5m candles)
+        3. Profit-decline guard (sell if profit drops from first deferral)
+        4. Max deferral time safety net
+        """
+        # 1. Check primary timeframe uptrend
+        if not is_in_uptrend(candles_df, self.trend_config):
+            self.deferred_profits.pop(ticker_pair, None)
+            return False  # not in uptrend on primary — sell
+
+        # 2. Short-timeframe confirmation
+        short_ohlcv = self.exchange_service.execute_op(
+            ticker_pair=ticker_pair,
+            op=CONSTANTS.OP_FETCH_OHLCV,
+            params={CONSTANTS.PARAM_TIMEFRAME: self.pd_confirmation_timeframe}
+        )
+        if short_ohlcv and len(short_ohlcv) >= 30:
+            short_df = pd.DataFrame(short_ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+            if not is_in_uptrend(short_df, self.trend_config):
+                logger.info(f"{ticker_pair}: primary uptrend but {self.pd_confirmation_timeframe} "
+                            f"shows reversal, selling now")
+                self.deferred_profits.pop(ticker_pair, None)
+                return False  # micro-trend reversing — sell
+        else:
+            # Can't confirm short timeframe — don't defer (safe default)
+            self.deferred_profits.pop(ticker_pair, None)
+            return False
+
+        # 3. Profit-decline guard — use avg of the profitable lots being sold,
+        #    not the overall avg_position (which includes underwater lots)
+        exit_avg = calculate_avg_position(profitable_positions)
+        current_profit = calculate_profit_percent(exit_avg, ticker_info["bid"])
+        if current_profit is None:
+            return False
+
+        if ticker_pair not in self.deferred_profits:
+            # First deferral — record baseline
+            self.deferred_profits[ticker_pair] = {
+                "profit_pct": current_profit,
+                "time": time.time()
+            }
+            logger.info(f"{ticker_pair}: deferring take-profit (both timeframes bullish), "
+                        f"profit: {current_profit * 100:.2f}%")
+            return True
+
+        baseline = self.deferred_profits[ticker_pair]
+
+        # 4. Max deferral time
+        elapsed_mins = (time.time() - baseline["time"]) / 60
+        if elapsed_mins >= self.pd_max_deferral_minutes:
+            logger.info(f"{ticker_pair}: max deferral time ({self.pd_max_deferral_minutes} min) reached, "
+                        f"selling now (profit: {current_profit * 100:.2f}%)")
+            self.deferred_profits.pop(ticker_pair, None)
+            return False
+
+        # 5. Profit declined since first deferral
+        if current_profit < baseline["profit_pct"]:
+            logger.info(f"{ticker_pair}: profit declined since deferral "
+                        f"({baseline['profit_pct'] * 100:.2f}% -> {current_profit * 100:.2f}%), "
+                        f"selling now")
+            self.deferred_profits.pop(ticker_pair, None)
+            return False
+
+        logger.info(f"{ticker_pair}: continuing deferral "
+                    f"(profit: {current_profit * 100:.2f}%, baseline: {baseline['profit_pct'] * 100:.2f}%, "
+                    f"elapsed: {elapsed_mins:.1f} min)")
+        return True
+
     def _check_graduated_exit(self, ticker_pair, avg_position, ticker_info, all_positions):
         if not self.dcs_enabled or avg_position is None:
             return TradeAction.NOOP
@@ -447,7 +538,12 @@ class CryptoBot:
 
         effective_activation = self.ge_base_activation * tightening_factor
 
-        profit_pct = calculate_profit_percent(avg_position, ticker_info["bid"])
+        bid_price = ticker_info.get("bid")
+        if not bid_price:
+            logger.warning(f"{ticker_pair}: missing or zero bid price, holding")
+            return TradeAction.NOOP
+
+        profit_pct = calculate_profit_percent(avg_position, bid_price)
         if profit_pct is None:
             return TradeAction.NOOP
 
@@ -459,9 +555,6 @@ class CryptoBot:
             return TradeAction.SELL
 
         # MARKET-RELATIVE LOSS CHECK — compare coin performance to BTC over the same holding period
-        relative_loss = None
-        use_absolute_fallback = False
-
         btc_change_pct, btc_then, btc_now = self._get_btc_change_since_positions(all_positions)
         if btc_change_pct is not None:
             relative_loss = profit_pct - btc_change_pct
@@ -469,41 +562,16 @@ class CryptoBot:
                         f"BTC: {btc_change_pct*100:.2f}% (${btc_then} → ${btc_now}), "
                         f"relative: {relative_loss*100:.2f}%")
         else:
-            logger.warning(f"{ticker_pair}: failed to fetch BTC benchmark, falling back to absolute loss")
-            use_absolute_fallback = True
+            logger.warning(f"{ticker_pair}: failed to fetch BTC benchmark, holding (no sell without market context)")
+            return TradeAction.NOOP
 
-        coin_underperforming = False
-        if use_absolute_fallback:
-            # Fallback: use absolute loss (original behavior) to avoid being stuck
-            coin_underperforming = profit_pct < CONSTANTS.ZERO
-        else:
-            coin_underperforming = relative_loss < -self.ge_underperform_threshold
+        # Suppress stop-loss in broad market downturns — selling in a crash locks in losses
+        if btc_change_pct < CONSTANTS.ZERO and abs(btc_change_pct) >= self.ge_btc_downturn_threshold:
+            logger.info(f"{ticker_pair}: GRADUATED EXIT suppressed — broad market downturn "
+                        f"(BTC: {btc_change_pct*100:.2f}%, threshold: -{self.ge_btc_downturn_threshold*100:.1f}%)")
+            return TradeAction.NOOP
 
-        # Force exit after max hold days — only if coin is underperforming market (or truly dead)
-        if days_demoted >= self.ge_max_hold_days:
-            # Check for zero volume (actually dead / delisting)
-            ticker_volume = ticker_info.get("quoteVolume") or ticker_info.get("baseVolume") or 0
-            if ticker_volume == 0:
-                logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit (zero volume, possible delisting) "
-                           f"after {days_demoted:.1f} days demoted")
-                return TradeAction.SELL
-
-            if coin_underperforming:
-                if use_absolute_fallback:
-                    logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit after {days_demoted:.1f} days "
-                               f"(absolute loss: {profit_pct*100:.2f}%)")
-                else:
-                    logger.info(f"{ticker_pair}: GRADUATED EXIT — force exit after {days_demoted:.1f} days "
-                               f"(relative loss vs BTC: {relative_loss*100:.2f}%, "
-                               f"threshold: -{self.ge_underperform_threshold*100:.2f}%)")
-                return TradeAction.SELL
-            else:
-                if use_absolute_fallback:
-                    logger.info(f"{ticker_pair}: GRADUATED EXIT — max hold days reached, "
-                               f"coin not in loss, holding (profit: {profit_pct*100:.2f}%)")
-                else:
-                    logger.info(f"{ticker_pair}: GRADUATED EXIT — max hold days reached but coin is not "
-                               f"underperforming market, holding (relative: {relative_loss*100:.2f}%)")
+        coin_underperforming = relative_loss < -self.ge_underperform_threshold
 
         # Stop-loss active after configured grace period — market-relative
         if days_demoted >= self.ge_loss_active_after_days and coin_underperforming:
@@ -516,20 +584,14 @@ class CryptoBot:
                 decay_factor = Decimal("0.5")
             effective_max_loss = self.ge_max_loss_percent * decay_factor
 
-            loss_to_check = profit_pct if use_absolute_fallback else relative_loss
-            if loss_to_check < CONSTANTS.ZERO and abs(loss_to_check) >= effective_max_loss:
-                if use_absolute_fallback:
-                    logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss at {profit_pct*100:.2f}% "
-                               f"(max loss: -{effective_max_loss*100:.2f}%, "
-                               f"days demoted: {days_demoted:.1f})")
-                else:
-                    logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss on relative loss {relative_loss*100:.2f}% "
-                               f"(coin: {profit_pct*100:.2f}%, BTC: {btc_change_pct*100:.2f}%, "
-                               f"max loss: -{effective_max_loss*100:.2f}%, "
-                               f"days demoted: {days_demoted:.1f})")
+            if relative_loss < CONSTANTS.ZERO and abs(relative_loss) >= effective_max_loss:
+                logger.info(f"{ticker_pair}: GRADUATED EXIT — stop-loss on relative loss {relative_loss*100:.2f}% "
+                           f"(coin: {profit_pct*100:.2f}%, BTC: {btc_change_pct*100:.2f}%, "
+                           f"max loss: -{effective_max_loss*100:.2f}%, "
+                           f"days demoted: {days_demoted:.1f})")
                 return TradeAction.SELL
 
-        relative_str = f"relative_loss: {relative_loss*100:.2f}%, " if relative_loss is not None else ""
+        relative_str = f"relative_loss: {relative_loss*100:.2f}%, "
         logger.debug(f"{ticker_pair}: graduated exit check — profit: {profit_pct*100:.2f}%, "
                     f"activation: {effective_activation*100:.2f}%, "
                     f"{relative_str}"
@@ -550,6 +612,7 @@ class CryptoBot:
 
             if idx == N:
                 logger.debug(f"heartbeat!")
+                self._reconcile_pending_orders()
                 time.sleep(self.sleep_interval)
                 idx = 0
 
@@ -584,7 +647,21 @@ class CryptoBot:
                 'symbol': ticker_pair
             }
             all_positions = self.mongodb_service.query(self.current_positions_collection, ticker_filter)
-            avg_position = calculate_avg_position(all_positions) 
+
+            # Exclude lots tied to pending sell orders
+            pending_sells = self.mongodb_service.query(
+                self.pending_orders_collection,
+                {"ticker_pair": ticker_pair, "side": "sell"}
+            )
+            if pending_sells:
+                excluded_ids = set()
+                for ps in pending_sells:
+                    excluded_ids.update(ps.get("positions_to_exit_ids", []))
+                if excluded_ids:
+                    all_positions = [p for p in all_positions if p["id"] not in excluded_ids]
+                    logger.info(f"{ticker_pair}: excluded {len(excluded_ids)} lot(s) tied to pending sell orders")
+
+            avg_position = calculate_avg_position(all_positions)
 
             ticker_info = self.exchange_service.execute_op(ticker_pair=ticker_pair, op=CONSTANTS.OP_FETCH_TICKER)
             if ticker_info is None:
@@ -595,6 +672,7 @@ class CryptoBot:
             graduated_action = self._check_graduated_exit(ticker_pair, avg_position, ticker_info, all_positions)
             if graduated_action == TradeAction.SELL and all_positions:
                 self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+                self.deferred_profits.pop(ticker_pair, None)
                 time.sleep(self.crypto_currency_sleep_interval)
                 continue
 
@@ -604,9 +682,17 @@ class CryptoBot:
                                                                   ticker_info,
                                                                   take_profit_threshold,
                                                                   take_profit_evaluation_type)
+            if profitable_positions_to_exit is not None and self.profit_deferral_enabled:
+                should_defer = self._should_defer_profit_taking(
+                    ticker_pair, candles_df, profitable_positions_to_exit, ticker_info
+                )
+                if should_defer:
+                    profitable_positions_to_exit = None  # skip auto-sell, fall through to strategies
+
             if profitable_positions_to_exit is not None:
                 logger.info(f"{ticker_pair}: number of profitable positions to exit: {len(profitable_positions_to_exit)}")
                 self.handle_sell_order(ticker_pair, ticker_info, profitable_positions_to_exit)
+                self.deferred_profits.pop(ticker_pair, None)
                 continue
 
             self.handle_cooldown(ticker_pair)
@@ -620,13 +706,14 @@ class CryptoBot:
             
             if trade_action == TradeAction.BUY:
                 if ticker.upper() in self.sell_only_currencies:
-                    logger.info(f"{ticker_pair}: sell-only mode, skipping BUY signal")
+                    logger.info(f"{ticker_pair}: skipping BUY signal")
                 else:
                     logger.info(f"{ticker_pair}: BUY signal triggered")
                     self.handle_buy_order(ticker_pair, ticker_info)
             elif trade_action == TradeAction.SELL:
                 logger.info(f'{ticker_pair}: SELL signal triggered, number of lots being sold: {len(all_positions)}')
                 self.handle_sell_order(ticker_pair, ticker_info, all_positions)
+                self.deferred_profits.pop(ticker_pair, None)
       
             time.sleep(self.crypto_currency_sleep_interval)
         
@@ -673,7 +760,22 @@ class CryptoBot:
         if not order:
             logger.error(f"{ticker_pair}: FAILED to execute buy order")
             return None
-        
+
+        if order.get('status') != 'closed':
+            pending_doc = {
+                "order_id": order["info"]["order_id"],
+                "ticker_pair": ticker_pair,
+                "side": "buy",
+                "reserved_amount": float(amount),
+                "created_at": time.time(),
+                "last_order_snapshot": order
+            }
+            self.mongodb_service.insert_one(self.pending_orders_collection, pending_doc)
+            self.remaining_balance -= amount
+            self.start_cooldown(ticker_pair)
+            logger.warn(f"{ticker_pair}: BUY order pending (partially filled), saved to pending_orders")
+            return None
+
         self.remaining_balance -= amount
         self.mongodb_service.insert_one(self.current_positions_collection, order)
         self.start_cooldown(ticker_pair)
@@ -708,6 +810,20 @@ class CryptoBot:
             logger.error(f"{ticker_pair}: FAILED to execute sell order")
             return None
 
+        if order.get('status') != 'closed':
+            pending_doc = {
+                "order_id": order["info"]["order_id"],
+                "ticker_pair": ticker_pair,
+                "side": "sell",
+                "positions_to_exit": positions_to_exit,
+                "positions_to_exit_ids": positions_to_delete,
+                "created_at": time.time(),
+                "last_order_snapshot": order
+            }
+            self.mongodb_service.insert_one(self.pending_orders_collection, pending_doc)
+            logger.warn(f"{ticker_pair}: SELL order pending (partially filled), saved to pending_orders. Lots remain in trades.")
+            return None
+
         closed_position = {
             'sell_order': order,
             'closed_positions': positions_to_exit
@@ -733,6 +849,83 @@ class CryptoBot:
 
         logger.info(f"{ticker_pair}: SELL EXECUTED. price: {order['average']}, shares: {order['filled']}, proceeds: {proceeds}, remaining_balance: {self.remaining_balance}")
         return closed_position
+
+    def _reconcile_pending_orders(self):
+        pending_orders = self.mongodb_service.query(self.pending_orders_collection, {})
+        if not pending_orders:
+            return
+
+        logger.info(f"Reconciling {len(pending_orders)} pending order(s)")
+        for pending in pending_orders:
+            order_id = pending.get("order_id")
+            ticker_pair = pending.get("ticker_pair", "UNKNOWN")
+            try:
+                order = self.exchange_service.execute_op(
+                    ticker_pair=ticker_pair,
+                    op=CONSTANTS.OP_FETCH_ORDER,
+                    params={CONSTANTS.PARAM_ORDER_ID: order_id}
+                )
+                if order is None:
+                    logger.warn(f"{ticker_pair}: could not fetch pending order {order_id}, will retry next cycle")
+                    continue
+
+                status = order.get("status", "")
+                if status == "closed":
+                    self._complete_pending_order(pending, order)
+                elif status in ("canceled", "cancelled", "expired"):
+                    self._cleanup_cancelled_pending_order(pending, order)
+                else:
+                    logger.info(f"{ticker_pair}: pending order {order_id} still open (status: {status})")
+            except Exception as e:
+                logger.error(f"{ticker_pair}: error reconciling pending order {order_id}: {e}")
+
+    def _complete_pending_order(self, pending, order):
+        ticker_pair = pending.get("ticker_pair", "UNKNOWN")
+        side = pending.get("side")
+        order_id = pending.get("order_id")
+
+        if side == "buy":
+            self.mongodb_service.insert_one(self.current_positions_collection, order)
+            logger.info(f"{ticker_pair}: pending BUY order {order_id} completed, inserted into trades")
+        elif side == "sell":
+            positions_to_exit = pending.get("positions_to_exit", [])
+            positions_to_exit_ids = pending.get("positions_to_exit_ids", [])
+            closed_position = {
+                "sell_order": order,
+                "closed_positions": positions_to_exit
+            }
+            self.mongodb_service.insert_one(self.closed_positions_collection, closed_position)
+
+            if positions_to_exit_ids:
+                delete_filter = {"id": {"$in": positions_to_exit_ids}}
+                self.mongodb_service.delete_many(self.current_positions_collection, delete_filter)
+
+            to_reinvest_percent = self.reinvestment_percent
+            if ticker_pair in self.overrides:
+                if CONSTANTS.CONFIG_REINVESTMENT_PERCENT in self.overrides[ticker_pair]:
+                    to_reinvest_percent = Decimal(self.overrides[ticker_pair][CONSTANTS.CONFIG_REINVESTMENT_PERCENT])
+
+            proceeds = Decimal(order['info']['total_value_after_fees'])
+            if to_reinvest_percent > CONSTANTS.ZERO:
+                self.remaining_balance += (proceeds * to_reinvest_percent)
+
+            logger.info(f"{ticker_pair}: pending SELL order {order_id} completed, proceeds: {proceeds}")
+
+        self.mongodb_service.delete_many(self.pending_orders_collection, {"order_id": order_id})
+
+    def _cleanup_cancelled_pending_order(self, pending, order):
+        ticker_pair = pending.get("ticker_pair", "UNKNOWN")
+        side = pending.get("side")
+        order_id = pending.get("order_id")
+
+        if side == "buy":
+            reserved = Decimal(str(pending.get("reserved_amount", 0)))
+            self.remaining_balance += reserved
+            logger.info(f"{ticker_pair}: pending BUY order {order_id} cancelled, restored {reserved} to balance")
+        elif side == "sell":
+            logger.info(f"{ticker_pair}: pending SELL order {order_id} cancelled, lots remain in trades")
+
+        self.mongodb_service.delete_many(self.pending_orders_collection, {"order_id": order_id})
 
     def start_cooldown(self, ticker_pair):
         self.ticker_trades_cooldown_periods[ticker_pair] = time.time()

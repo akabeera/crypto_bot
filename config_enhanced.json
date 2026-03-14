@@ -1,6 +1,6 @@
 {
-    "max_spend": 50,
-    "amount_per_transaction": 5,
+    "max_spend": 200,
+    "amount_per_transaction": 20,
     "reinvestment_percent": 50,
     "sleep_interval": 1,
     "trade_cooldown_period": 20,
@@ -15,20 +15,22 @@
     "exchange_id": "coinbase",
     "dry_run": false,
     "take_profits": {
-        "threshold_percent": 10,
+        "threshold_percent": 5,
         "evaluation_type": "AVERAGE_THEN_INDIVIDUAL_LOTS"
     },
     "db": {
         "db_type": "mongodb",
         "db_name": "crypto-bot",
         "current_positions_collection": "trades",
-        "closed_positions_collection": "sell_orders"
+        "closed_positions_collection": "sell_orders",
+        "pending_orders_collection": "pending_orders"
     },
     "exchange": {
         "exchange_id": "coinbase",
         "limit_order_period_time_limit": 4,
         "limit_order_num_periods_limit": 10,
-        "create_market_buy_order_requires_price": false
+        "create_market_buy_order_requires_price": false,
+        "limit_order_max_resets": 3
     },
     "strategies": [
         {
@@ -163,6 +165,11 @@
             ]
         }
     ],
+    "profit_deferral": {
+        "enabled": true,
+        "confirmation_timeframe": "5m",
+        "max_deferral_minutes": 30
+    },
     "sell_only_currencies": [
         "BNT",
         "OXT",
@@ -193,7 +200,8 @@
             "max_hold_days": 28,
             "max_loss_percent": 5.0,
             "loss_active_after_days": 14,
-            "underperform_threshold_percent": 10.0
+            "underperform_threshold_percent": 10.0,
+            "btc_downturn_threshold_percent": 15
         }
     },
     "supported_crypto_currencies": [
